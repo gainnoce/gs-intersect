@@ -3,6 +3,7 @@ services:
     name: gs-intersect-api
     runtime: docker
     dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
     plan: free
     healthCheckPath: /__docs__/
     envVars:
