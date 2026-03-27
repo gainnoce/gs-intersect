@@ -1,7 +1,7 @@
 FROM rocker/plumber:latest
 
-# Install gsDesign (plumber + jsonlite already included in base image)
-RUN R -e "install.packages('gsDesign', repos='https://cloud.r-project.org', dependencies=TRUE)"
+# Install gsDesign from Posit Package Manager (pre-built Linux binaries — no source compilation)
+RUN R -e "install.packages('gsDesign', repos='https://packagemanager.posit.co/cran/__linux__/jammy/latest', dependencies=TRUE)"
 
 WORKDIR /app
 
