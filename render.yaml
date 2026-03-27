@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: gs-intersect-api
+    runtime: docker
+    dockerfilePath: ./api/Dockerfile
+    plan: free
+    healthCheckPath: /__docs__/
+    envVars:
+      - key: PORT
+        value: 8000
