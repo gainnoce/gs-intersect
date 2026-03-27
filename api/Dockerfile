@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install R packages
-RUN R -e "install.packages(c('plumber', 'gsDesign', 'jsonlite'), repos='https://cloud.r-project.org')"
+RUN R -e "install.packages(c('plumber', 'gsDesign', 'jsonlite'), repos='https://cloud.r-project.org', dependencies=TRUE); stopifnot(requireNamespace('plumber'), requireNamespace('gsDesign'), requireNamespace('jsonlite'))"
 
 WORKDIR /app
 
