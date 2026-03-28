@@ -42,10 +42,7 @@ export default function Home() {
           </div>
           <div className="hidden sm:flex items-center gap-3">
             <div className="h-8 w-px bg-az-light-platinum" />
-            <div className="text-right">
-              <p className="text-xs font-medium text-az-graphite">AstraZeneca</p>
-              <p className="text-xs text-az-platinum">Rigat &amp; Yap collaboration</p>
-            </div>
+            <p className="text-xs font-medium text-az-graphite">AstraZeneca</p>
             <div className="w-3 h-8 rounded-sm" style={{ background: "linear-gradient(180deg, #830051 0%, #003865 100%)" }} />
           </div>
         </div>
@@ -131,7 +128,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-az-light-platinum mt-auto bg-white">
         <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-between text-xs text-az-platinum">
-          <span>GS-Intersect · Companion tool for publication</span>
+          <span>GS-Intersect</span>
           <span>Powered by gsDesign (R)</span>
         </div>
       </footer>

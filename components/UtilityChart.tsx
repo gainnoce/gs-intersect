@@ -35,8 +35,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       name: "Interim Analysis",
       text: power,
       hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>Utility: %{y:.4f}<extra></extra>",
-      line: { color: "#830051", width: 2 },
-      marker: { color: "#830051", size: 6 },
+      line: { color: "#6366f1", width: 2.5 },
+      marker: { color: "#6366f1", size: 7 },
     },
     {
       x: [optimal_IA.events_IA],
@@ -45,7 +45,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       mode: "markers",
       name: `Optimal IA (${optimal_IA.power}%)`,
       hovertemplate: `<b>Optimal IA</b><br>Power: ${optimal_IA.power}%<br>Events: %{x}<br>Utility: %{y:.4f}<extra></extra>`,
-      marker: { color: "#d0006f", size: 14, symbol: "star" },
+      marker: { color: "#f43f5e", size: 15, symbol: "star" },
     },
     {
       x: eventsFA,
@@ -55,8 +55,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       name: "Final Analysis",
       text: power,
       hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>Utility: %{y:.4f}<extra></extra>",
-      line: { color: "#003865", width: 2, dash: "dot" },
-      marker: { color: "#003865", size: 6 },
+      line: { color: "#10b981", width: 2.5, dash: "dot" },
+      marker: { color: "#10b981", size: 7 },
     },
     {
       x: [optimal_FA.events_FA],
@@ -65,7 +65,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       mode: "markers",
       name: `Optimal FA (${optimal_FA.power}%)`,
       hovertemplate: `<b>Optimal FA</b><br>Power: ${optimal_FA.power}%<br>Events: %{x}<br>Utility: %{y:.4f}<extra></extra>`,
-      marker: { color: "#f0ab00", size: 14, symbol: "star" },
+      marker: { color: "#f97316", size: 15, symbol: "star" },
     },
   ];
 
