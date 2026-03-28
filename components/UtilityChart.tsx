@@ -19,10 +19,11 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
   const power = results.map((r) => `${r.power}%`);
 
   const commonAxis = {
-    gridcolor: "#27272a",
-    linecolor: "#3f3f46",
-    tickfont: { color: "#a1a1aa", size: 11 },
-    titlefont: { color: "#d4d4d8", size: 12 },
+    gridcolor: "#ebefee",
+    linecolor: "#9db0ac",
+    tickfont: { color: "#9db0ac", size: 11 },
+    titlefont: { color: "#3f4444", size: 12 },
+    zerolinecolor: "#ebefee",
   };
 
   const data: Plotly.Data[] = [
@@ -34,8 +35,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       name: "Interim Analysis",
       text: power,
       hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>Utility: %{y:.4f}<extra></extra>",
-      line: { color: "#6366f1", width: 2 },
-      marker: { color: "#6366f1", size: 6 },
+      line: { color: "#830051", width: 2 },
+      marker: { color: "#830051", size: 6 },
     },
     {
       x: [optimal_IA.events_IA],
@@ -44,7 +45,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       mode: "markers",
       name: `Optimal IA (${optimal_IA.power}%)`,
       hovertemplate: `<b>Optimal IA</b><br>Power: ${optimal_IA.power}%<br>Events: %{x}<br>Utility: %{y:.4f}<extra></extra>`,
-      marker: { color: "#f43f5e", size: 12, symbol: "star" },
+      marker: { color: "#d0006f", size: 14, symbol: "star" },
     },
     {
       x: eventsFA,
@@ -54,8 +55,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       name: "Final Analysis",
       text: power,
       hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>Utility: %{y:.4f}<extra></extra>",
-      line: { color: "#10b981", width: 2, dash: "dot" },
-      marker: { color: "#10b981", size: 6 },
+      line: { color: "#003865", width: 2, dash: "dot" },
+      marker: { color: "#003865", size: 6 },
     },
     {
       x: [optimal_FA.events_FA],
@@ -64,23 +65,23 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       mode: "markers",
       name: `Optimal FA (${optimal_FA.power}%)`,
       hovertemplate: `<b>Optimal FA</b><br>Power: ${optimal_FA.power}%<br>Events: %{x}<br>Utility: %{y:.4f}<extra></extra>`,
-      marker: { color: "#f97316", size: 12, symbol: "star" },
+      marker: { color: "#f0ab00", size: 14, symbol: "star" },
     },
   ];
 
   const layout: Partial<Plotly.Layout> = {
     paper_bgcolor: "transparent",
-    plot_bgcolor: "transparent",
-    font: { family: "var(--font-geist-sans)", color: "#a1a1aa" },
+    plot_bgcolor: "#f8faf9",
+    font: { family: "Inter, sans-serif", color: "#3f4444" },
     xaxis: { ...commonAxis, title: { text: "Number of Events" } },
     yaxis: { ...commonAxis, title: { text: "Utility Score  [ LR(+) × (1 − CV) ]" } },
     legend: {
-      font: { color: "#d4d4d8", size: 11 },
-      bgcolor: "rgba(0,0,0,0)",
-      bordercolor: "#3f3f46",
+      font: { color: "#3f4444", size: 11 },
+      bgcolor: "rgba(255,255,255,0.8)",
+      bordercolor: "#ebefee",
       borderwidth: 1,
     },
-    margin: { t: 20, r: 20, b: 50, l: 60 },
+    margin: { t: 20, r: 20, b: 50, l: 65 },
     hovermode: "closest",
   };
 
