@@ -89,7 +89,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     <Plot
       data={data}
       layout={layout}
-      config={{ displayModeBar: false, responsive: true }}
+      config={{
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d"],
+        responsive: true,
+        toImageButtonOptions: { format: "png", filename: "gs-intersect-chart", scale: 2 },
+      }}
       style={{ width: "100%", height: "380px" }}
     />
   );

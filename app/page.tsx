@@ -115,6 +115,9 @@ export default function Home() {
                     optimal_IA={result.optimal_IA}
                     optimal_FA={result.optimal_FA}
                   />
+                  <p className="text-[11px] text-az-platinum mt-2">
+                    Click legend items to show/hide curves · Drag to zoom · Double-click to reset · Hover for values · Toolbar top-right to download
+                  </p>
                 </div>
                 <OptimalCard optimal_IA={result.optimal_IA} optimal_FA={result.optimal_FA} />
                 <ResultsTable
