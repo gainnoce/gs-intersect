@@ -5,12 +5,14 @@ import { InputPanel } from "@/components/InputPanel";
 import { UtilityChart } from "@/components/UtilityChart";
 import { OptimalCard } from "@/components/OptimalCard";
 import { ResultsTable } from "@/components/ResultsTable";
+import { RawOutput } from "@/components/RawOutput";
 import { runOptimization } from "@/lib/api";
 import type { DesignInputs, OptimizeResponse } from "@/lib/api";
 import { AlertCircle } from "lucide-react";
 
 export default function Home() {
   const [result, setResult] = useState<OptimizeResponse | null>(null);
+  const [lastInputs, setLastInputs] = useState<DesignInputs | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,6 +22,7 @@ export default function Home() {
     try {
       const data = await runOptimization(inputs);
       setResult(data);
+      setLastInputs(inputs);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
     } finally {
@@ -118,7 +121,10 @@ export default function Home() {
                   results={result.results}
                   optimal_IA={result.optimal_IA}
                   optimal_FA={result.optimal_FA}
+                  inputs={lastInputs!}
+                  response={result}
                 />
+                <RawOutput response={result} inputs={lastInputs!} />
               </>
             )}
           </div>

@@ -2,32 +2,45 @@
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
-import type { DesignResult } from "@/lib/api";
-import { exportCSV } from "@/lib/api";
+import { Download, FileCode } from "lucide-react";
+import type { DesignResult, DesignInputs, OptimizeResponse } from "@/lib/api";
+import { exportCSV, exportRScript } from "@/lib/api";
 
 interface Props {
   results: DesignResult[];
   optimal_IA: DesignResult;
   optimal_FA: DesignResult;
+  inputs: DesignInputs;
+  response: OptimizeResponse;
 }
 
-export function ResultsTable({ results, optimal_IA, optimal_FA }: Props) {
+export function ResultsTable({ results, optimal_IA, optimal_FA, inputs, response }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
           Full Results
         </h3>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => exportCSV(results)}
-          className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-2 bg-white"
-        >
-          <Download className="w-3.5 h-3.5" />
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportRScript(inputs, response)}
+            className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-2 bg-white"
+          >
+            <FileCode className="w-3.5 h-3.5" />
+            Export R Script
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportCSV(results)}
+            className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-2 bg-white"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Export CSV
+          </Button>
+        </div>
       </div>
       <div className="rounded-lg border border-az-light-platinum overflow-auto max-h-72 bg-white shadow-sm">
         <Table>
