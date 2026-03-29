@@ -60,6 +60,9 @@
     font-family: var(--font-heading);
     letter-spacing: var(--tracking-az-tight);
   }
+  button, [role="button"] {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {
