@@ -66,6 +66,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   const [activeIA,   setActiveIA]   = useState(0);
   const [vis,        setVis]        = useState<boolean[]>(Array(numIAs + 1).fill(true));
   const [logScale,   setLogScale]   = useState(false);
+  const [sharedX,    setSharedX]    = useState(false);
 
   // ── Per-stage data ────────────────────────────────────────────────────
   const stagesData = Array.from({ length: numIAs }, (_, j) => {
@@ -95,7 +96,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
 
   // Each individual chart gets its own snug x-range to avoid cramping.
   // The combined overlay uses the global range spanning all analyses.
-  const iaXRange  = xPad(iaSt.events);
+  const iaXRange  = sharedX ? xRange : xPad(iaSt.events);
   const faXRange  = xPad(eventsFA);
   const allEvents = [...stagesData.flatMap(s => s.events), ...eventsFA];
   const xMin      = Math.min(...allEvents) * 0.95;
@@ -180,7 +181,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       plot_bgcolor:  "#f8faf9",
       showlegend:    false,
       font:   { family: "Inter, sans-serif", color: "#3f4444" },
-      margin: { t: 76, r: 56, b: 50, l: 62 },
+      margin: { t: 76, r: 56, b: 50, l: 72 },
       hovermode: "closest",
       xaxis: {
         ...baseAxis,
@@ -214,17 +215,22 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const optStar = (x: number, y: number, cv: string, power: number, color: string, label: string): any => ({
-    x: [x], y: [y],
-    type: "scatter", mode: "text+markers",
-    marker: { color, size: 14, symbol: "star" },
-    text: [`CV ${cv}`],
-    textposition: "top right",
-    textfont: { color, size: 9.5, family: "Inter, sans-serif" },
-    cliponaxis: false,
-    hovertemplate: `<b>${label}</b><br>Power: ${power}%<br>CV: ${cv}<br>Utility: %{y:.4f}<extra></extra>`,
-    showlegend: false, xaxis: "x", yaxis: "y",
-  });
+  const optStar = (x: number, y: number, cv: string, power: number, color: string, label: string, chartXRange?: number[]): any => {
+    // Place text on the side with more room so it stays inside the chart area
+    const xMid = chartXRange ? (chartXRange[0] + chartXRange[1]) / 2 : x;
+    const textposition = x >= xMid ? "top left" : "top right";
+    return {
+      x: [x], y: [y],
+      type: "scatter", mode: "text+markers",
+      marker: { color, size: 14, symbol: "star" },
+      text: [`CV ${cv}`],
+      textposition,
+      textfont: { color, size: 9.5, family: "Inter, sans-serif" },
+      cliponaxis: false,
+      hovertemplate: `<b>${label}</b><br>Power: ${power}%<br>CV: ${cv}<br>Utility: %{y:.4f}<extra></extra>`,
+      showlegend: false, xaxis: "x", yaxis: "y",
+    };
+  };
 
   // ── IA chart data ─────────────────────────────────────────────────────
   const iaInit = makeInitTicks(iaSt.events, iaSt.cvs, iaSt.optEv, 2);
@@ -237,7 +243,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
       showlegend: false, xaxis: "x", yaxis: "y",
     },
-    optStar(iaSt.optEv, iaSt.optUt, iaSt.optCv, iaSt.optPow, iaOptCol, `Optimal IA${numIAs > 1 ? ` ${activeIA + 1}` : ""}`),
+    optStar(iaSt.optEv, iaSt.optUt, iaSt.optCv, iaSt.optPow, iaOptCol, `Optimal IA${numIAs > 1 ? ` ${activeIA + 1}` : ""}`, iaXRange),
     {
       x: iaInit.vals, y: iaInit.vals.map(() => null as unknown as number),
       type: "scatter", mode: "markers",
@@ -263,7 +269,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
       showlegend: false, xaxis: "x", yaxis: "y",
     },
-    optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, FA_OPT_COLOR, "Optimal FA"),
+    optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, FA_OPT_COLOR, "Optimal FA", faXRange),
     {
       x: faInit.vals, y: faInit.vals.map(() => null as unknown as number),
       type: "scatter", mode: "markers",
@@ -289,7 +295,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
           hovertemplate: `<b>${label} Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>`,
           showlegend: false, xaxis: "x", yaxis: "y",
         },
-        { ...optStar(st.optEv, st.optUt, st.optCv, st.optPow, optCol, `Optimal ${label}`), visible: vis[j] ? true : "legendonly" },
+        { ...optStar(st.optEv, st.optUt, st.optCv, st.optPow, optCol, `Optimal ${label}`, xRange), visible: vis[j] ? true : "legendonly" },
       ];
     }),
     {
@@ -300,7 +306,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       hovertemplate: "<b>FA Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
       showlegend: false, xaxis: "x", yaxis: "y",
     },
-    { ...optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, FA_OPT_COLOR, "Optimal FA"), visible: vis[numIAs] ? true : "legendonly" },
+    { ...optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, FA_OPT_COLOR, "Optimal FA", xRange), visible: vis[numIAs] ? true : "legendonly" },
     // CV axis anchor traces — only for k=2
     ...(numK === 2 ? (() => {
       const ovlIAInit = makeInitTicks(stagesData[0].events, stagesData[0].cvs, stagesData[0].optEv, 3);
@@ -432,9 +438,22 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
                 ))}
               </div>
             )}
-            <span className="text-[10px] text-az-platinum ml-auto whitespace-nowrap">
+            <span className={`text-[10px] text-az-platinum whitespace-nowrap ${numIAs === 1 ? "ml-auto" : ""}`}>
               Optimal: {iaSt.optPow}% power · CV {iaSt.optCv}
             </span>
+            {numIAs > 1 && (
+              <Button
+                variant="outline" size="sm"
+                onClick={() => setSharedX(sx => !sx)}
+                className={`ml-auto text-[10px] h-6 px-2.5 gap-1 transition-colors ${
+                  sharedX
+                    ? "bg-az-navy/10 border-az-navy/40 text-az-navy"
+                    : "border-az-platinum text-az-graphite hover:border-az-mulberry hover:text-az-mulberry"
+                }`}
+              >
+                {sharedX ? "Own axis" : "Share x-axis"}
+              </Button>
+            )}
           </div>
 
           <Plot
