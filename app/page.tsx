@@ -106,8 +106,8 @@ export default function Home() {
 
             {result && !loading && (
               <>
-                <div className="rounded-xl border border-az-light-platinum bg-white p-5 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
                       Utility Curves
                     </h2>

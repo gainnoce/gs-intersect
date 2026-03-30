@@ -34,6 +34,25 @@ const getPlotly = () => (window as any).Plotly;
 const AXES_SINGLE  = ["xaxis", "xaxis2", "yaxis"];
 const AXES_OVERLAY = ["xaxis", "xaxis2", "xaxis3", "yaxis"];
 
+// Build initial tick arrays for a CV top-axis:
+//   - every `stride`-th data point starting from `startIdx`
+//   - always include the optimal event position so its CV tick is visible
+const makeInitTicks = (
+  events: number[],
+  labels: string[],
+  optEvent: number,
+  stride: number,
+  startIdx = 0,
+) => {
+  const labelMap = new Map(events.map((e, i) => [e, labels[i]]));
+  const strided = events.filter((_, i) => i >= startIdx && (i - startIdx) % stride === 0);
+  const unique = [...new Set([...strided, optEvent])].sort((a, b) => a - b);
+  return {
+    vals:   unique,
+    labels: unique.map(e => labelMap.get(e) ?? ""),
+  };
+};
+
 export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
   const [iaDiv,      setIaDiv]      = useState<HTMLElement | null>(null);
   const [faDiv,      setFaDiv]      = useState<HTMLElement | null>(null);
@@ -54,23 +73,37 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
   const xMax = Math.max(...eventsFA) * 1.02;
   const xRange = [xMin, xMax];
 
-  // Initial CV ticks — every other so the default full-zoom view isn't crowded.
-  // onRelayout overrides these dynamically as the user zooms.
-  const eventsIA_init = eventsIA.filter((_, i) => i % 2 === 0);
-  const cvIA_init     = cvIA.filter((_, i) => i % 2 === 0);
-  const eventsFA_init = eventsFA.filter((_, i) => i % 2 === 0);
-  const cvFA_init     = cvFA.filter((_, i) => i % 2 === 0);
+  // y-axis ranges with top headroom so the star callout text sits comfortably
+  // below the top of the chart rather than crammed against it.
+  const yMinIA  = Math.min(...utilIA);
+  const yMaxIA  = Math.max(...utilIA);
+  const yMinFA  = Math.min(...utilFA);
+  const yMaxFA  = Math.max(...utilFA);
+  const yRangeIA  = [yMinIA  - (yMaxIA  - yMinIA)  * 0.06, yMaxIA  + (yMaxIA  - yMinIA)  * 0.18];
+  const yRangeFA  = [yMinFA  - (yMaxFA  - yMinFA)  * 0.06, yMaxFA  + (yMaxFA  - yMinFA)  * 0.18];
+  const yRangeAll = [
+    Math.min(yMinIA, yMinFA) - (Math.max(yMaxIA, yMaxFA) - Math.min(yMinIA, yMinFA)) * 0.06,
+    Math.max(yMaxIA, yMaxFA) + (Math.max(yMaxIA, yMaxFA) - Math.min(yMinIA, yMinFA)) * 0.18,
+  ];
+
+  // Initial CV tick arrays — every-other for single charts (always includes
+  // the optimal event so its CV value is visible), every-3rd for the overlay
+  // with FA starting at index 3 to avoid labels crowding the left edge of the curve.
+  const iaInit    = makeInitTicks(eventsIA, cvIA, optimal_IA.events_IA, 2);
+  const faInit    = makeInitTicks(eventsFA, cvFA, optimal_FA.events_FA, 2);
+  const ovlIAInit = makeInitTicks(eventsIA, cvIA, optimal_IA.events_IA, 3);
+  const ovlFAInit = makeInitTicks(eventsFA, cvFA, optimal_FA.events_FA, 3, 3);
 
   // Sorted utility → power% for right y-axis labels
   const sortedIA = [...results].sort((a, b) => a.utility_IA - b.utility_IA);
   const sortedFA = [...results].sort((a, b) => a.utility_FA - b.utility_FA);
 
   // ── Dynamic CV tick density ───────────────────────────────────────────
-  // Only updates xaxis2/xaxis3 (the CV axes). The bottom events axis and
-  // y-axes are left entirely to Plotly's native behaviour.
+  // Fires on x-range changes; recomputes which CV ticks to show based on
+  // how many data points are currently in view. Only touches xaxis2/xaxis3.
   const makeCvRelayout = (
     divRef: HTMLElement | null,
-    axes: { key: string; events: number[]; labels: string[] }[],
+    axes: { key: string; events: number[]; labels: string[]; optEvent: number }[],
   ) => (relayoutData: Record<string, unknown>) => {
     if (!divRef || !getPlotly()) return;
     const hasRange     = relayoutData["xaxis.range[0]"] !== undefined;
@@ -81,15 +114,15 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     const hi = hasRange ? Number(relayoutData["xaxis.range[1]"]) : xMax;
 
     const update: Record<string, unknown> = {};
-    axes.forEach(({ key, events, labels }) => {
-      const visible = events.reduce<{ e: number; label: string }[]>((acc, e, i) => {
-        if (e >= lo && e <= hi) acc.push({ e, label: labels[i] });
-        return acc;
-      }, []);
+    axes.forEach(({ key, events, labels, optEvent }) => {
+      const labelMap = new Map(events.map((e, i) => [e, labels[i]]));
+      const visible = events.filter(e => e >= lo && e <= hi);
       const n = visible.length;
       const stride = n > 12 ? 3 : n > 6 ? 2 : 1;
-      update[`${key}.tickvals`] = visible.filter((_, i) => i % stride === 0).map(p => p.e);
-      update[`${key}.ticktext`] = visible.filter((_, i) => i % stride === 0).map(p => p.label);
+      const strided = visible.filter((_, i) => i % stride === 0);
+      const unique = [...new Set([...strided, ...(visible.includes(optEvent) ? [optEvent] : [])])].sort((a, b) => a - b);
+      update[`${key}.tickvals`] = unique;
+      update[`${key}.ticktext`] = unique.map(e => labelMap.get(e) ?? "");
     });
     getPlotly().relayout(divRef, update);
   };
@@ -129,12 +162,14 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     sortedRows: DesignResult[],
     utilKey: "utility_IA" | "utility_FA",
     accentColor: string,
+    yRange: number[],
   ): Partial<Plotly.Layout> => ({
     paper_bgcolor: "transparent",
     plot_bgcolor:  "#f8faf9",
     showlegend:    false,
     font:   { family: "Inter, sans-serif", color: "#3f4444" },
-    margin: { t: 76, r: 56, b: 50, l: 54 },
+    // l:62 gives the y-axis title a few extra pixels away from the card edge
+    margin: { t: 76, r: 56, b: 50, l: 62 },
     hovermode: "closest",
     xaxis: {
       ...baseAxis,
@@ -151,9 +186,12 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       range: xRange, showgrid: false, zeroline: false,
       showline: true, linecolor: accentColor, ticks: "outside",
     } as Partial<Plotly.LayoutAxis>,
+    // Explicit y range gives 18% headroom above the max utility so the star's
+    // CV text label sits well within the chart rather than near the top edge.
     yaxis: {
       ...baseAxis,
       title: { text: "Utility Score" },
+      range: yRange,
     } as Partial<Plotly.LayoutAxis>,
     yaxis2: {
       overlaying: "y", side: "right",
@@ -167,12 +205,9 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
   });
 
   // Optimal-star trace helper — cliponaxis:false lets the CV text label
-  // render above the plot boundary without being clipped.
-  const optStar = (
-    x: number, y: number, cv: string, power: number,
-    color: string, label: string,
+  // render beyond the plot boundary without being clipped.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): any => ({
+  const optStar = (x: number, y: number, cv: string, power: number, color: string, label: string): any => ({
     x: [x], y: [y],
     type: "scatter", mode: "text+markers",
     marker: { color, size: 14, symbol: "star" },
@@ -194,9 +229,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       showlegend: false, xaxis: "x", yaxis: "y",
     },
     optStar(optimal_IA.events_IA, optimal_IA.utility_IA, optimal_IA.cv_IA.toFixed(3), optimal_IA.power, C.iaOpt, "Optimal IA"),
-    // invisible trace to activate xaxis2
     {
-      x: eventsIA_init, y: eventsIA_init.map(() => null as unknown as number),
+      x: iaInit.vals, y: iaInit.vals.map(() => null as unknown as number),
       type: "scatter", mode: "markers",
       marker: { opacity: 0, size: 1 }, showlegend: false,
       xaxis: "x2", yaxis: "y", hoverinfo: "skip" as const,
@@ -214,7 +248,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     },
     optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, C.faOpt, "Optimal FA"),
     {
-      x: eventsFA_init, y: eventsFA_init.map(() => null as unknown as number),
+      x: faInit.vals, y: faInit.vals.map(() => null as unknown as number),
       type: "scatter", mode: "markers",
       marker: { opacity: 0, size: 1 }, showlegend: false,
       xaxis: "x2", yaxis: "y", hoverinfo: "skip" as const,
@@ -245,13 +279,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       visible: vis[3] ? true : "legendonly" },
     // invisible traces to activate xaxis2 (IA CVs) and xaxis3 (FA CVs)
     {
-      x: eventsIA_init, y: eventsIA_init.map(() => null as unknown as number),
+      x: ovlIAInit.vals, y: ovlIAInit.vals.map(() => null as unknown as number),
       type: "scatter", mode: "markers",
       marker: { opacity: 0, size: 1 }, showlegend: false,
       xaxis: "x2", yaxis: "y", hoverinfo: "skip" as const,
     },
     {
-      x: eventsFA_init, y: eventsFA_init.map(() => null as unknown as number),
+      x: ovlFAInit.vals, y: ovlFAInit.vals.map(() => null as unknown as number),
       type: "scatter", mode: "markers",
       marker: { opacity: 0, size: 1 }, showlegend: false,
       xaxis: "x3", yaxis: "y", hoverinfo: "skip" as const,
@@ -263,7 +297,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     plot_bgcolor:  "#f8faf9",
     showlegend:    false,
     font:   { family: "Inter, sans-serif", color: "#3f4444" },
-    margin: { t: 112, r: 60, b: 52, l: 56 },
+    margin: { t: 112, r: 60, b: 52, l: 62 },
     hovermode: "closest",
     xaxis: {
       ...baseAxis,
@@ -273,7 +307,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     xaxis2: {
       overlaying: "x", side: "top",
       matches: "x",
-      tickvals: eventsIA_init, ticktext: cvIA_init,
+      tickvals: ovlIAInit.vals, ticktext: ovlIAInit.labels,
       tickangle: -45,
       tickfont: { color: C.ia, size: 9 },
       title: { text: "IA Critical Value (HR)", font: { color: C.ia, size: 10 } },
@@ -284,7 +318,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       overlaying: "x", side: "top",
       matches: "x",
       anchor: "free", position: 1.15,
-      tickvals: eventsFA_init, ticktext: cvFA_init,
+      tickvals: ovlFAInit.vals, ticktext: ovlFAInit.labels,
       tickangle: -45,
       tickfont: { color: C.fa, size: 9 },
       title: { text: "FA Critical Value (HR)", font: { color: C.fa, size: 10 } },
@@ -294,6 +328,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     yaxis: {
       ...baseAxis,
       title: { text: "Utility Score" },
+      range: yRangeAll,
     } as Partial<Plotly.LayoutAxis>,
     yaxis2: {
       overlaying: "y", side: "right",
@@ -320,7 +355,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       {/* ── Side-by-side IA / FA ── */}
       <div className="grid grid-cols-2 gap-3">
 
-        {/* IA — overflow-hidden clips the chart to the rounded card corners */}
+        {/* IA */}
         <div className="rounded-xl border border-az-light-platinum bg-white shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-5 pt-4 pb-1">
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: C.ia }} />
@@ -333,13 +368,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
           </div>
           <Plot
             data={iaData}
-            layout={singleLayout(eventsIA_init, cvIA_init, sortedIA, "utility_IA", C.ia)}
+            layout={singleLayout(iaInit.vals, iaInit.labels, sortedIA, "utility_IA", C.ia, yRangeIA)}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: "100%", height: "340px" }}
             onInitialized={(_, div) => setIaDiv(div)}
             onUpdate={(_, div) => setIaDiv(div)}
             onRelayout={makeCvRelayout(iaDiv, [
-              { key: "xaxis2", events: eventsIA, labels: cvIA },
+              { key: "xaxis2", events: eventsIA, labels: cvIA, optEvent: optimal_IA.events_IA },
             ])}
           />
           <div className="flex justify-end gap-2 px-5 pb-4 pt-2">
@@ -360,13 +395,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
           </div>
           <Plot
             data={faData}
-            layout={singleLayout(eventsFA_init, cvFA_init, sortedFA, "utility_FA", C.fa)}
+            layout={singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", C.fa, yRangeFA)}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: "100%", height: "340px" }}
             onInitialized={(_, div) => setFaDiv(div)}
             onUpdate={(_, div) => setFaDiv(div)}
             onRelayout={makeCvRelayout(faDiv, [
-              { key: "xaxis2", events: eventsFA, labels: cvFA },
+              { key: "xaxis2", events: eventsFA, labels: cvFA, optEvent: optimal_FA.events_FA },
             ])}
           />
           <div className="flex justify-end gap-2 px-5 pb-4 pt-2">
@@ -394,8 +429,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
           onInitialized={(_, div) => setOverlayDiv(div)}
           onUpdate={(_, div) => setOverlayDiv(div)}
           onRelayout={makeCvRelayout(overlayDiv, [
-            { key: "xaxis2", events: eventsIA, labels: cvIA },
-            { key: "xaxis3", events: eventsFA, labels: cvFA },
+            { key: "xaxis2", events: eventsIA, labels: cvIA, optEvent: optimal_IA.events_IA },
+            { key: "xaxis3", events: eventsFA, labels: cvFA, optEvent: optimal_FA.events_FA },
           ])}
         />
 
