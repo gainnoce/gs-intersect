@@ -195,6 +195,8 @@ export default function Home() {
                   results={result.results}
                   optimal_IA={result.optimal_IA}
                   optimal_FA={result.optimal_FA}
+                  optimal_IAs={result.optimal_IAs}
+                  k={result.k}
                   inputs={lastInputs!}
                   response={result}
                 />

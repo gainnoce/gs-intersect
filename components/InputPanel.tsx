@@ -29,13 +29,13 @@ interface Props {
   initialValues?: Partial<DesignInputs>;
 }
 
-function FieldLabel({ label, tooltip }: { label: string; tooltip: string }) {
+function FieldLabel({ label, tooltip, error }: { label: string; tooltip: string; error?: boolean }) {
   return (
     <div className="flex items-center gap-1.5">
-      <Label className="text-az-graphite text-xs font-medium">{label}</Label>
+      <Label className={`text-xs font-medium ${error ? "text-red-500" : "text-az-graphite"}`}>{label}</Label>
       <Tooltip>
         <TooltipTrigger>
-          <Info className="w-3 h-3 text-az-platinum cursor-help" />
+          <Info className={`w-3 h-3 cursor-help ${error ? "text-red-400" : "text-az-platinum"}`} />
         </TooltipTrigger>
         <TooltipContent className="max-w-56 text-xs bg-az-graphite border-az-graphite text-white">
           {tooltip}
@@ -46,8 +46,9 @@ function FieldLabel({ label, tooltip }: { label: string; tooltip: string }) {
 }
 
 export function InputPanel({ onRun, loading, initialValues }: Props) {
-  const [k,      setK]      = useState("2");
-  const [alpha,  setAlpha]  = useState("0.05");
+  const [k,        setK]       = useState("2");
+  const [alpha,    setAlpha]   = useState("0.05");
+  const [submitted, setSubmitted] = useState(false);
   const [timing, setTiming] = useState("0.7");
   const [hr,     setHr]     = useState("0.7");
   const [medianC, setMedianC] = useState("12");
@@ -80,26 +81,64 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
   const kNum = parseInt(k) || 2;
   const timingPlaceholder = TIMING_DEFAULTS[kNum] ?? "0.7";
 
-  const handleRun = () => {
-    const timingArr = parseArr(timing);
-    // For k=2 with a single timing value, send [value]
-    const timingFinal = timingArr.length > 0 ? timingArr : [0.7];
-    onRun({
-      k:       kNum,
-      alpha:   parseFloat(alpha),
-      timing:  timingFinal,
-      hr:      parseFloat(hr),
-      medianC: parseFloat(medianC),
-      eta:     parseFloat(eta),
-      minfup:  parseFloat(minfup),
-      gamma:   parseArr(gamma),
-      R:       parseArr(R),
-      sfu,
-      sfl,
-    });
+  // ── Validation ────────────────────────────────────────────────────────
+  const getInvalidFields = (): Set<string> => {
+    if (!submitted) return new Set();
+    const s   = new Set<string>();
+    const ta  = parseArr(timing);
+    const ga  = parseArr(gamma);
+    const ra  = parseArr(R);
+    const alp = parseFloat(alpha);
+    const hrv = parseFloat(hr);
+    const med = parseFloat(medianC);
+    const etv = parseFloat(eta);
+    const mfp = parseFloat(minfup);
+
+    if (isNaN(alp) || alp <= 0 || alp >= 1)                                  s.add("alpha");
+    if (ta.length !== kNum - 1 ||
+        ta.some(v => v <= 0 || v >= 1) ||
+        ta.some((v, i) => i > 0 && v <= ta[i - 1]))                           s.add("timing");
+    if (isNaN(hrv) || hrv <= 0 || hrv >= 1)                                   s.add("hr");
+    if (isNaN(med) || med <= 0)                                                s.add("medianC");
+    if (isNaN(etv) || etv < 0)                                                 s.add("eta");
+    if (isNaN(mfp) || mfp <= 0)                                                s.add("minfup");
+    if (ga.length === 0 || ga.some(v => v <= 0))                               s.add("gamma");
+    if (ra.length === 0 || ra.length !== ga.length || ra.some(v => v <= 0))   s.add("R");
+    return s;
   };
 
-  const inputClass = "bg-white border-az-platinum text-az-graphite text-xs h-8 focus:border-az-mulberry focus:ring-az-mulberry/20 placeholder:text-az-platinum";
+  const invalidFields = getInvalidFields();
+
+  const handleRun = () => {
+    setSubmitted(true);
+    const ta = parseArr(timing);
+    const ga = parseArr(gamma);
+    const ra = parseArr(R);
+    const alp = parseFloat(alpha);
+    const hrv = parseFloat(hr);
+    const med = parseFloat(medianC);
+    const etv = parseFloat(eta);
+    const mfp = parseFloat(minfup);
+
+    const valid = (
+      !isNaN(alp) && alp > 0 && alp < 1 &&
+      ta.length === kNum - 1 && ta.every(v => v > 0 && v < 1) &&
+      ta.every((v, i) => i === 0 || v > ta[i - 1]) &&
+      !isNaN(hrv) && hrv > 0 && hrv < 1 &&
+      !isNaN(med) && med > 0 &&
+      !isNaN(etv) && etv >= 0 &&
+      !isNaN(mfp) && mfp > 0 &&
+      ga.length > 0 && ga.every(v => v > 0) &&
+      ra.length > 0 && ra.length === ga.length && ra.every(v => v > 0)
+    );
+    if (!valid) return;
+
+    onRun({ k: kNum, alpha: alp, timing: ta, hr: hrv, medianC: med, eta: etv, minfup: mfp, gamma: ga, R: ra, sfu, sfl });
+  };
+
+  const inputClass  = "bg-white border-az-platinum text-az-graphite text-xs h-8 focus:border-az-mulberry focus:ring-az-mulberry/20 placeholder:text-az-platinum";
+  const errorClass  = "bg-red-50 border-red-400 text-az-graphite text-xs h-8 focus:border-red-400 focus:ring-red-100 placeholder:text-red-300";
+  const ic = (name: string) => invalidFields.has(name) ? errorClass : inputClass;
 
   return (
     <Card className="bg-white border-az-light-platinum shadow-sm h-fit print-hidden">
@@ -129,24 +168,25 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <FieldLabel label="Alpha (α)" tooltip="One-sided Type I error rate. Common values: 0.025 (one-sided) or 0.05." />
-              <Input value={alpha} onChange={(e) => setAlpha(e.target.value)} className={inputClass} />
+              <FieldLabel label="Alpha (α)" tooltip="One-sided Type I error rate. Common values: 0.025 (one-sided) or 0.05." error={invalidFields.has("alpha")} />
+              <Input value={alpha} onChange={(e) => setAlpha(e.target.value)} className={ic("alpha")} />
             </div>
             <div className="space-y-1.5 col-span-2">
               <FieldLabel
                 label={kNum === 2 ? "Interim timing" : `Interim timings (${kNum - 1} values)`}
-                tooltip="Information fraction(s) at each interim analysis (0–1), comma-separated. E.g., 0.7 = 70% of total events."
+                tooltip="Information fraction(s) at each interim analysis (0–1), comma-separated. Must be strictly increasing. E.g., 0.5, 0.8 for k=3."
+                error={invalidFields.has("timing")}
               />
               <Input
                 value={timing}
                 onChange={(e) => setTiming(e.target.value)}
-                className={inputClass}
+                className={ic("timing")}
                 placeholder={timingPlaceholder}
               />
             </div>
             <div className="space-y-1.5">
-              <FieldLabel label="Dropout rate (η)" tooltip="Exponential dropout/loss-to-follow-up rate per time unit." />
-              <Input value={eta} onChange={(e) => setEta(e.target.value)} className={inputClass} />
+              <FieldLabel label="Dropout rate (η)" tooltip="Exponential dropout/loss-to-follow-up rate per time unit." error={invalidFields.has("eta")} />
+              <Input value={eta} onChange={(e) => setEta(e.target.value)} className={ic("eta")} />
             </div>
           </div>
         </div>
@@ -157,16 +197,16 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
           <p className="text-[10px] uppercase tracking-widest text-az-platinum font-semibold">Survival Endpoint</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <FieldLabel label="Median survival" tooltip="Median survival time in the control arm, in months." />
-              <Input value={medianC} onChange={(e) => setMedianC(e.target.value)} className={inputClass} />
+              <FieldLabel label="Median survival" tooltip="Median survival time in the control arm, in months." error={invalidFields.has("medianC")} />
+              <Input value={medianC} onChange={(e) => setMedianC(e.target.value)} className={ic("medianC")} />
             </div>
             <div className="space-y-1.5">
-              <FieldLabel label="Target HR" tooltip="Target hazard ratio (experimental vs. control). Values below 1 favour the experimental arm." />
-              <Input value={hr} onChange={(e) => setHr(e.target.value)} className={inputClass} />
+              <FieldLabel label="Target HR" tooltip="Target hazard ratio (experimental vs. control). Values below 1 favour the experimental arm." error={invalidFields.has("hr")} />
+              <Input value={hr} onChange={(e) => setHr(e.target.value)} className={ic("hr")} />
             </div>
             <div className="space-y-1.5 col-span-2">
-              <FieldLabel label="Min. follow-up (months)" tooltip="Minimum follow-up time after the last patient is enrolled, in months." />
-              <Input value={minfup} onChange={(e) => setMinfup(e.target.value)} className={inputClass} />
+              <FieldLabel label="Min. follow-up (months)" tooltip="Minimum follow-up time after the last patient is enrolled, in months." error={invalidFields.has("minfup")} />
+              <Input value={minfup} onChange={(e) => setMinfup(e.target.value)} className={ic("minfup")} />
             </div>
           </div>
         </div>
@@ -176,12 +216,12 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
         <div className="space-y-3">
           <p className="text-[10px] uppercase tracking-widest text-az-platinum font-semibold">Enrollment</p>
           <div className="space-y-1.5">
-            <FieldLabel label="Enrollment rates (γ)" tooltip="Piecewise enrollment rates (patients/time unit), comma-separated." />
-            <Input value={gamma} onChange={(e) => setGamma(e.target.value)} className={inputClass} placeholder="2.5, 5, 7.5, 10" />
+            <FieldLabel label="Enrollment rates (γ)" tooltip="Piecewise enrollment rates (patients/time unit), comma-separated." error={invalidFields.has("gamma")} />
+            <Input value={gamma} onChange={(e) => setGamma(e.target.value)} className={ic("gamma")} placeholder="2.5, 5, 7.5, 10" />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel label="Enrollment durations (R)" tooltip="Duration of each enrollment period, comma-separated. Must match the number of γ values." />
-            <Input value={R} onChange={(e) => setR(e.target.value)} className={inputClass} placeholder="2, 2, 2, 12" />
+            <FieldLabel label="Enrollment durations (R)" tooltip="Duration of each enrollment period, comma-separated. Must match the number of γ values." error={invalidFields.has("R")} />
+            <Input value={R} onChange={(e) => setR(e.target.value)} className={ic("R")} placeholder="2, 2, 2, 12" />
           </div>
         </div>
 
@@ -235,6 +275,11 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
             "Run Optimization"
           )}
         </Button>
+        {submitted && invalidFields.size > 0 && (
+          <p className="text-xs text-red-500 text-center pt-1">
+            Please correct the highlighted fields above.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

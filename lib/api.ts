@@ -238,11 +238,23 @@ for (j in seq_len(k)) {
   URL.revokeObjectURL(url);
 }
 
-export function exportCSV(results: DesignResult[]): void {
-  const headers = ["Power (%)", "N Total", "Events IA", "Events FA", "CV IA", "CV FA", "Utility IA", "Utility FA"];
-  const rows = results.map((r) => [
-    r.power, r.N, r.events_IA, r.events_FA, r.cv_IA, r.cv_FA, r.utility_IA, r.utility_FA,
-  ]);
+export function exportCSV(results: DesignResult[], k = 2): void {
+  const numIAs = k - 1;
+  const iaHeaders = Array.from({ length: numIAs }, (_, j) =>
+    numIAs === 1
+      ? ["Events IA", "CV IA", "Utility IA"]
+      : [`Events IA${j + 1}`, `CV IA${j + 1}`, `Utility IA${j + 1}`]
+  ).flat();
+  const headers = ["Power (%)", "N Total", ...iaHeaders, "Events FA", "CV FA", "Utility FA"];
+
+  const rows = results.map((r) => {
+    const iaCols = Array.from({ length: numIAs }, (_, j) => [
+      r.ia_stages?.[j]?.events  ?? r.events_IA,
+      r.ia_stages?.[j]?.cv      ?? r.cv_IA,
+      r.ia_stages?.[j]?.utility ?? r.utility_IA,
+    ]).flat();
+    return [r.power, r.N, ...iaCols, r.events_FA, r.cv_FA, r.utility_FA];
+  });
   const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
