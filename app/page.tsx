@@ -34,7 +34,7 @@ export default function Home() {
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="border-b border-az-platinum bg-white/90 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
               GS-Intersect
@@ -52,8 +52,8 @@ export default function Home() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 max-w-screen-xl mx-auto w-full px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 items-start">
+      <main className="flex-1 max-w-screen-2xl mx-auto w-full px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
 
           {/* Left: inputs */}
           <InputPanel onRun={handleRun} loading={loading} />
@@ -133,7 +133,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-az-light-platinum mt-auto bg-white">
-        <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-between text-xs text-az-platinum">
+        <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center justify-between text-xs text-az-platinum">
           <span>GS-Intersect</span>
           <span>Powered by gsDesign (R)</span>
         </div>
