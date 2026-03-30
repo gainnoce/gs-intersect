@@ -107,9 +107,12 @@ export default function Home() {
             {result && !loading && (
               <>
                 <div className="rounded-xl border border-az-light-platinum bg-white p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-az-navy mb-4" style={{ fontFamily: "var(--font-heading)" }}>
-                    Utility Curves
-                  </h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
+                      Utility Curves
+                    </h2>
+                    <span className="text-[11px] text-az-platinum">Drag to zoom · Double-click to reset</span>
+                  </div>
                   <UtilityChart
                     results={result.results}
                     optimal_IA={result.optimal_IA}
