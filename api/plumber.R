@@ -130,6 +130,10 @@ function(req) {
 
   results <- Filter(Negate(is.null), results)
 
+  if (length(results) == 0) {
+    stop("All power levels failed. Check that timing fractions are strictly increasing and parameters are feasible for k=", k, ".")
+  }
+
   # Optimal for backward-compat top-level IA (stage 1) and FA
   u_IA <- sapply(results, `[[`, "utility_IA")
   u_FA <- sapply(results, `[[`, "utility_FA")

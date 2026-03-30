@@ -463,8 +463,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             layout={iaLayout}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: "100%", height: "340px" }}
-            onInitialized={(_, div) => setIaDivs(prev => prev.map((d, i) => i === activeIA ? div : d))}
-            onUpdate={(_, div)       => setIaDivs(prev => prev.map((d, i) => i === activeIA ? div : d))}
+            onInitialized={(_, div) => setIaDivs(prev => prev[activeIA] === div ? prev : prev.map((d, i) => i === activeIA ? div : d))}
+            onUpdate={(_, div)       => setIaDivs(prev => prev[activeIA] === div ? prev : prev.map((d, i) => i === activeIA ? div : d))}
             onRelayout={makeCvRelayout(iaDivs[activeIA], [
               { key: "xaxis2", events: iaSt.events, labels: iaSt.cvs, optEvent: iaSt.optEv },
             ])}

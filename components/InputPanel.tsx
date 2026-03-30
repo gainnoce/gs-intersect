@@ -17,7 +17,7 @@ const SPENDING_FUNCTIONS = [
   { value: "sfHSD", label: "Hwang-Shih-DeCani" },
 ];
 
-const TIMING_PLACEHOLDERS: Record<number, string> = {
+const TIMING_DEFAULTS: Record<number, string> = {
   2: "0.7",
   3: "0.5, 0.8",
   4: "0.4, 0.65, 0.85",
@@ -78,7 +78,7 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
     s.split(",").map((v) => parseFloat(v.trim())).filter((n) => !isNaN(n));
 
   const kNum = parseInt(k) || 2;
-  const timingPlaceholder = TIMING_PLACEHOLDERS[kNum] ?? "0.7";
+  const timingPlaceholder = TIMING_DEFAULTS[kNum] ?? "0.7";
 
   const handleRun = () => {
     const timingArr = parseArr(timing);
@@ -115,7 +115,7 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <FieldLabel label="Stages (k)" tooltip="Number of analyses (1 interim + 1 final = 2, etc.). Maximum 4 stages." />
-              <Select value={k} onValueChange={v => { if (v) { setK(v); setTiming(""); } }}>
+              <Select value={k} onValueChange={v => { if (v) { setK(v); setTiming(TIMING_DEFAULTS[parseInt(v)] ?? "0.7"); } }}>
                 <SelectTrigger className={inputClass}>
                   <SelectValue />
                 </SelectTrigger>
