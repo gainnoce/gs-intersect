@@ -96,12 +96,12 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
 
   // Each individual chart gets its own snug x-range to avoid cramping.
   // The combined overlay uses the global range spanning all analyses.
-  const iaXRange  = sharedX ? xRange : xPad(iaSt.events);
-  const faXRange  = xPad(eventsFA);
   const allEvents = [...stagesData.flatMap(s => s.events), ...eventsFA];
   const xMin      = Math.min(...allEvents) * 0.95;
   const xMax      = Math.max(...allEvents) * 1.02;
   const xRange    = [xMin, xMax];
+  const iaXRange  = sharedX ? xRange : xPad(iaSt.events);
+  const faXRange  = xPad(eventsFA);
 
   // y ranges
   const iaYRange  = yHeadroom(iaSt.utils);
