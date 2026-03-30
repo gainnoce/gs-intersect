@@ -39,7 +39,7 @@ function FieldLabel({ label, tooltip }: { label: string; tooltip: string }) {
 }
 
 export function InputPanel({ onRun, loading }: Props) {
-  const [k, setK] = useState("2");
+  const k = "2";
   const [alpha, setAlpha] = useState("0.05");
   const [timing, setTiming] = useState("0.7");
   const [hr, setHr] = useState("0.7");
@@ -85,8 +85,11 @@ export function InputPanel({ onRun, loading }: Props) {
           <p className="text-[10px] uppercase tracking-widest text-az-platinum font-semibold">Trial Design</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <FieldLabel label="Stages (k)" tooltip="Number of analyses including the final analysis. Default: 2 (one interim + one final)." />
-              <Input value={k} onChange={(e) => setK(e.target.value)} className={inputClass} />
+              <FieldLabel label="Stages (k)" tooltip="Fixed at 2 (one interim + one final analysis). Multi-stage support coming in a future release." />
+              <div className="flex items-center h-8 px-3 rounded-md border border-az-light-platinum bg-az-light-platinum/50 text-az-graphite text-xs select-none">
+                2
+                <span className="ml-auto text-[10px] text-az-platinum italic">locked</span>
+              </div>
             </div>
             <div className="space-y-1.5">
               <FieldLabel label="Alpha (α)" tooltip="One-sided Type I error rate. Common values: 0.025 (one-sided) or 0.05." />
@@ -109,7 +112,7 @@ export function InputPanel({ onRun, loading }: Props) {
           <p className="text-[10px] uppercase tracking-widest text-az-platinum font-semibold">Survival Endpoint</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <FieldLabel label="Median survival (control)" tooltip="Median survival time in the control arm, in months." />
+              <FieldLabel label="Median survival" tooltip="Median survival time in the control arm, in months." />
               <Input value={medianC} onChange={(e) => setMedianC(e.target.value)} className={inputClass} />
             </div>
             <div className="space-y-1.5">
@@ -147,7 +150,7 @@ export function InputPanel({ onRun, loading }: Props) {
               <SelectTrigger className={inputClass}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-white border-az-platinum">
+              <SelectContent className="bg-white border-az-platinum min-w-[220px]">
                 {SPENDING_FUNCTIONS.map((f) => (
                   <SelectItem key={f.value} value={f.value} className="text-az-graphite text-xs focus:bg-az-light-platinum">
                     {f.label}
@@ -162,7 +165,7 @@ export function InputPanel({ onRun, loading }: Props) {
               <SelectTrigger className={inputClass}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-white border-az-platinum">
+              <SelectContent className="bg-white border-az-platinum min-w-[220px]">
                 {SPENDING_FUNCTIONS.map((f) => (
                   <SelectItem key={f.value} value={f.value} className="text-az-graphite text-xs focus:bg-az-light-platinum">
                     {f.label}

@@ -416,9 +416,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
           <h3 className="text-xs font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
             Combined View
           </h3>
-          <span className="text-[10px] text-az-platinum">
-            IA + FA overlaid · IA CV (indigo) · FA CV (emerald) · Power % (right)
-          </span>
+          <span className="text-[10px] text-az-platinum">IA + FA overlaid</span>
         </div>
 
         <Plot
