@@ -1,20 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { InputPanel } from "@/components/InputPanel";
 import { UtilityChart } from "@/components/UtilityChart";
 import { OptimalCard } from "@/components/OptimalCard";
 import { ResultsTable } from "@/components/ResultsTable";
 import { RawOutput } from "@/components/RawOutput";
-import { runOptimization } from "@/lib/api";
+import { runOptimization, inputsToParams, paramsToInputs } from "@/lib/api";
 import type { DesignInputs, OptimizeResponse } from "@/lib/api";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Share2, Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  const [result, setResult] = useState<OptimizeResponse | null>(null);
-  const [lastInputs, setLastInputs] = useState<DesignInputs | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [result,      setResult]      = useState<OptimizeResponse | null>(null);
+  const [lastInputs,  setLastInputs]  = useState<DesignInputs | null>(null);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
+  const [urlInputs,   setUrlInputs]   = useState<Partial<DesignInputs> | undefined>(undefined);
+  const [shareToast,  setShareToast]  = useState(false);
+  const autoRanRef = useRef(false);
+
+  // ── Read URL params on mount ───────────────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const parsed = paramsToInputs(params);
+    if (parsed) {
+      setUrlInputs(parsed);
+    }
+  }, []);
+
+  // Auto-run once when urlInputs are populated (avoids running before InputPanel seeds)
+  useEffect(() => {
+    if (!urlInputs || autoRanRef.current) return;
+    autoRanRef.current = true;
+    handleRun(urlInputs as DesignInputs);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlInputs]);
 
   const handleRun = async (inputs: DesignInputs) => {
     setLoading(true);
@@ -30,10 +51,22 @@ export default function Home() {
     }
   };
 
+  const handleShare = () => {
+    if (!lastInputs) return;
+    const params = inputsToParams(lastInputs);
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShareToast(true);
+      setTimeout(() => setShareToast(false), 2500);
+    });
+  };
+
+  const handlePrint = () => window.print();
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="border-b border-az-platinum bg-white/90 backdrop-blur sticky top-0 z-10">
+      <header className="border-b border-az-platinum bg-white/90 backdrop-blur sticky top-0 z-10 print-hidden">
         <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
@@ -43,10 +76,41 @@ export default function Home() {
               Optimal power selection for Group Sequential survival trial design
             </p>
           </div>
-          <div className="hidden sm:flex items-center gap-3">
-            <div className="h-8 w-px bg-az-light-platinum" />
-            <p className="text-xs font-medium text-az-graphite">AstraZeneca</p>
-            <div className="w-3 h-8 rounded-sm" style={{ background: "linear-gradient(180deg, #830051 0%, #003865 100%)" }} />
+          <div className="flex items-center gap-3">
+            {result && !loading && (
+              <>
+                <div className="relative">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShare}
+                    className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    Share
+                  </Button>
+                  {shareToast && (
+                    <div className="absolute right-0 top-9 bg-az-graphite text-white text-xs rounded-md px-3 py-1.5 whitespace-nowrap shadow-lg animate-slide-in">
+                      Link copied!
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrint}
+                  className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  Export PDF
+                </Button>
+              </>
+            )}
+            <div className="hidden sm:flex items-center gap-3">
+              <div className="h-8 w-px bg-az-light-platinum" />
+              <p className="text-xs font-medium text-az-graphite">AstraZeneca</p>
+              <div className="w-3 h-8 rounded-sm" style={{ background: "linear-gradient(180deg, #830051 0%, #003865 100%)" }} />
+            </div>
           </div>
         </div>
       </header>
@@ -56,12 +120,12 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
 
           {/* Left: inputs */}
-          <InputPanel onRun={handleRun} loading={loading} />
+          <InputPanel onRun={handleRun} loading={loading} initialValues={urlInputs} />
 
           {/* Right: results */}
           <div className="space-y-6">
             {!result && !loading && !error && (
-              <div className="flex flex-col items-center justify-center h-96 rounded-xl border-2 border-dashed border-az-light-platinum text-center px-8 bg-white">
+              <div className="flex flex-col items-center justify-center h-96 rounded-xl border-2 border-dashed border-az-light-platinum text-center px-8 bg-white print-hidden">
                 <div className="w-14 h-14 rounded-full bg-az-light-platinum flex items-center justify-center mb-4">
                   <svg className="w-7 h-7 text-az-platinum" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
@@ -79,7 +143,7 @@ export default function Home() {
             )}
 
             {loading && (
-              <div className="flex flex-col items-center justify-center h-96 rounded-xl border border-az-light-platinum bg-white">
+              <div className="flex flex-col items-center justify-center h-96 rounded-xl border border-az-light-platinum bg-white print-hidden">
                 <div className="flex gap-1.5 mb-4">
                   {[0, 1, 2].map((i) => (
                     <div
@@ -95,7 +159,7 @@ export default function Home() {
             )}
 
             {error && (
-              <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+              <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 print-hidden">
                 <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm text-red-700 font-medium">Optimization failed</p>
@@ -107,7 +171,7 @@ export default function Home() {
             {result && !loading && (
               <>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between print-hidden">
                     <h2 className="text-sm font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
                       Utility Curves
                     </h2>
@@ -117,9 +181,16 @@ export default function Home() {
                     results={result.results}
                     optimal_IA={result.optimal_IA}
                     optimal_FA={result.optimal_FA}
+                    optimal_IAs={result.optimal_IAs}
+                    k={result.k}
                   />
                 </div>
-                <OptimalCard optimal_IA={result.optimal_IA} optimal_FA={result.optimal_FA} />
+                <OptimalCard
+                  optimal_IA={result.optimal_IA}
+                  optimal_FA={result.optimal_FA}
+                  optimal_IAs={result.optimal_IAs}
+                  k={result.k}
+                />
                 <ResultsTable
                   results={result.results}
                   optimal_IA={result.optimal_IA}
@@ -135,7 +206,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-az-light-platinum mt-auto bg-white">
+      <footer className="border-t border-az-light-platinum mt-auto bg-white print-hidden">
         <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center justify-between text-xs text-az-platinum">
           <span>GS-Intersect</span>
           <span>Powered by gsDesign (R)</span>

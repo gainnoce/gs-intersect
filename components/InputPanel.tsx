@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,9 +17,16 @@ const SPENDING_FUNCTIONS = [
   { value: "sfHSD", label: "Hwang-Shih-DeCani" },
 ];
 
+const TIMING_PLACEHOLDERS: Record<number, string> = {
+  2: "0.7",
+  3: "0.5, 0.8",
+  4: "0.4, 0.65, 0.85",
+};
+
 interface Props {
   onRun: (inputs: DesignInputs) => void;
   loading: boolean;
+  initialValues?: Partial<DesignInputs>;
 }
 
 function FieldLabel({ label, tooltip }: { label: string; tooltip: string }) {
@@ -38,33 +45,55 @@ function FieldLabel({ label, tooltip }: { label: string; tooltip: string }) {
   );
 }
 
-export function InputPanel({ onRun, loading }: Props) {
-  const k = "2";
-  const [alpha, setAlpha] = useState("0.05");
+export function InputPanel({ onRun, loading, initialValues }: Props) {
+  const [k,      setK]      = useState("2");
+  const [alpha,  setAlpha]  = useState("0.05");
   const [timing, setTiming] = useState("0.7");
-  const [hr, setHr] = useState("0.7");
+  const [hr,     setHr]     = useState("0.7");
   const [medianC, setMedianC] = useState("12");
-  const [eta, setEta] = useState("0.05");
+  const [eta,    setEta]    = useState("0.05");
   const [minfup, setMinfup] = useState("24");
-  const [gamma, setGamma] = useState("2.5, 5, 7.5, 10");
-  const [R, setR] = useState("2, 2, 2, 12");
-  const [sfu, setSfu] = useState("sfLDOF");
-  const [sfl, setSfl] = useState("sfLDOF");
+  const [gamma,  setGamma]  = useState("2.5, 5, 7.5, 10");
+  const [R,      setR]      = useState("2, 2, 2, 12");
+  const [sfu,    setSfu]    = useState("sfLDOF");
+  const [sfl,    setSfl]    = useState("sfLDOF");
+
+  // Seed state from initialValues (URL params on mount)
+  useEffect(() => {
+    if (!initialValues) return;
+    if (initialValues.k       !== undefined) setK(String(initialValues.k));
+    if (initialValues.alpha   !== undefined) setAlpha(String(initialValues.alpha));
+    if (initialValues.timing  !== undefined) setTiming(initialValues.timing.join(", "));
+    if (initialValues.hr      !== undefined) setHr(String(initialValues.hr));
+    if (initialValues.medianC !== undefined) setMedianC(String(initialValues.medianC));
+    if (initialValues.eta     !== undefined) setEta(String(initialValues.eta));
+    if (initialValues.minfup  !== undefined) setMinfup(String(initialValues.minfup));
+    if (initialValues.gamma   !== undefined) setGamma(initialValues.gamma.join(", "));
+    if (initialValues.R       !== undefined) setR(initialValues.R.join(", "));
+    if (initialValues.sfu     !== undefined) setSfu(initialValues.sfu);
+    if (initialValues.sfl     !== undefined) setSfl(initialValues.sfl);
+  }, [initialValues]);
 
   const parseArr = (s: string) =>
     s.split(",").map((v) => parseFloat(v.trim())).filter((n) => !isNaN(n));
 
+  const kNum = parseInt(k) || 2;
+  const timingPlaceholder = TIMING_PLACEHOLDERS[kNum] ?? "0.7";
+
   const handleRun = () => {
+    const timingArr = parseArr(timing);
+    // For k=2 with a single timing value, send [value]
+    const timingFinal = timingArr.length > 0 ? timingArr : [0.7];
     onRun({
-      k: parseInt(k),
-      alpha: parseFloat(alpha),
-      timing: parseFloat(timing),
-      hr: parseFloat(hr),
+      k:       kNum,
+      alpha:   parseFloat(alpha),
+      timing:  timingFinal,
+      hr:      parseFloat(hr),
       medianC: parseFloat(medianC),
-      eta: parseFloat(eta),
-      minfup: parseFloat(minfup),
-      gamma: parseArr(gamma),
-      R: parseArr(R),
+      eta:     parseFloat(eta),
+      minfup:  parseFloat(minfup),
+      gamma:   parseArr(gamma),
+      R:       parseArr(R),
       sfu,
       sfl,
     });
@@ -73,7 +102,7 @@ export function InputPanel({ onRun, loading }: Props) {
   const inputClass = "bg-white border-az-platinum text-az-graphite text-xs h-8 focus:border-az-mulberry focus:ring-az-mulberry/20 placeholder:text-az-platinum";
 
   return (
-    <Card className="bg-white border-az-light-platinum shadow-sm h-fit">
+    <Card className="bg-white border-az-light-platinum shadow-sm h-fit print-hidden">
       <CardHeader className="pb-3 border-b border-az-light-platinum">
         <CardTitle className="text-sm font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
           Design Parameters
@@ -85,19 +114,35 @@ export function InputPanel({ onRun, loading }: Props) {
           <p className="text-[10px] uppercase tracking-widest text-az-platinum font-semibold">Trial Design</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <FieldLabel label="Stages (k)" tooltip="Fixed at 2 (one interim + one final analysis). Multi-stage support coming in a future release." />
-              <div className="flex items-center h-8 px-3 rounded-md border border-az-light-platinum bg-az-light-platinum/50 text-az-graphite text-xs select-none">
-                2
-                <span className="ml-auto text-[10px] text-az-platinum italic">locked</span>
-              </div>
+              <FieldLabel label="Stages (k)" tooltip="Number of analyses (1 interim + 1 final = 2, etc.). Maximum 4 stages." />
+              <Select value={k} onValueChange={v => { if (v) { setK(v); setTiming(""); } }}>
+                <SelectTrigger className={inputClass}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-az-platinum">
+                  {["2", "3", "4"].map(v => (
+                    <SelectItem key={v} value={v} className="text-az-graphite text-xs focus:bg-az-light-platinum">
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <FieldLabel label="Alpha (α)" tooltip="One-sided Type I error rate. Common values: 0.025 (one-sided) or 0.05." />
               <Input value={alpha} onChange={(e) => setAlpha(e.target.value)} className={inputClass} />
             </div>
-            <div className="space-y-1.5">
-              <FieldLabel label="Interim timing" tooltip="Information fraction at the interim analysis (0–1). E.g., 0.7 = 70% of total events." />
-              <Input value={timing} onChange={(e) => setTiming(e.target.value)} className={inputClass} />
+            <div className="space-y-1.5 col-span-2">
+              <FieldLabel
+                label={kNum === 2 ? "Interim timing" : `Interim timings (${kNum - 1} values)`}
+                tooltip="Information fraction(s) at each interim analysis (0–1), comma-separated. E.g., 0.7 = 70% of total events."
+              />
+              <Input
+                value={timing}
+                onChange={(e) => setTiming(e.target.value)}
+                className={inputClass}
+                placeholder={timingPlaceholder}
+              />
             </div>
             <div className="space-y-1.5">
               <FieldLabel label="Dropout rate (η)" tooltip="Exponential dropout/loss-to-follow-up rate per time unit." />

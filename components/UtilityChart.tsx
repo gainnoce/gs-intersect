@@ -12,14 +12,15 @@ interface Props {
   results: DesignResult[];
   optimal_IA: DesignResult;
   optimal_FA: DesignResult;
+  optimal_IAs?: DesignResult[];
+  k?: number;
 }
 
-const C = {
-  ia:    "#6366f1",
-  iaOpt: "#f43f5e",
-  fa:    "#10b981",
-  faOpt: "#f97316",
-};
+// Colors per IA stage and FA
+const IA_COLORS     = ["#6366f1", "#7c3aed", "#9333ea"] as const;
+const IA_OPT_COLORS = ["#f43f5e", "#fb7185", "#fda4af"] as const;
+const FA_COLOR      = "#10b981";
+const FA_OPT_COLOR  = "#f97316";
 
 const baseAxis = {
   gridcolor:     "#ebefee",
@@ -31,12 +32,8 @@ const baseAxis = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getPlotly = () => (window as any).Plotly;
 
-const AXES_SINGLE  = ["xaxis", "xaxis2", "yaxis"];
-const AXES_OVERLAY = ["xaxis", "xaxis2", "xaxis3", "yaxis"];
-
-// Build initial tick arrays for a CV top-axis:
-//   - every `stride`-th data point starting from `startIdx`
-//   - always include the optimal event position so its CV tick is visible
+// Build initial tick arrays for a CV top-axis.
+// Always includes the optimal event position so its CV tick is visible.
 const makeInitTicks = (
   events: number[],
   labels: string[],
@@ -45,62 +42,69 @@ const makeInitTicks = (
   startIdx = 0,
 ) => {
   const labelMap = new Map(events.map((e, i) => [e, labels[i]]));
-  const strided = events.filter((_, i) => i >= startIdx && (i - startIdx) % stride === 0);
-  const unique = [...new Set([...strided, optEvent])].sort((a, b) => a - b);
+  const strided  = events.filter((_, i) => i >= startIdx && (i - startIdx) % stride === 0);
+  const unique   = [...new Set([...strided, optEvent])].sort((a, b) => a - b);
   return {
     vals:   unique,
     labels: unique.map(e => labelMap.get(e) ?? ""),
   };
 };
 
-export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
-  const [iaDiv,      setIaDiv]      = useState<HTMLElement | null>(null);
+const yHeadroom = (arr: number[]) => {
+  const mn = Math.min(...arr), mx = Math.max(...arr), sp = mx - mn;
+  return [mn - sp * 0.06, mx + sp * 0.18];
+};
+
+export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }: Props) {
+  const numK   = k ?? 2;
+  const numIAs = numK - 1;
+
+  const [iaDivs,     setIaDivs]     = useState<(HTMLElement | null)[]>(Array(numIAs).fill(null));
   const [faDiv,      setFaDiv]      = useState<HTMLElement | null>(null);
   const [overlayDiv, setOverlayDiv] = useState<HTMLElement | null>(null);
-  const [vis, setVis] = useState([true, true, true, true]);
+  const [activeIA,   setActiveIA]   = useState(0);
+  // vis: one boolean per IA stage curve + FA curve in overlay (opt stars follow their curve)
+  const [vis, setVis] = useState<boolean[]>(Array(numIAs + 1).fill(true));
 
-  // ── Raw arrays ────────────────────────────────────────────────────────
-  const eventsIA  = results.map(r => r.events_IA);
+  // ── Per-stage data ─────────────────────────────────────────────────────
+  const stagesData = Array.from({ length: numIAs }, (_, j) => {
+    const events = results.map(r => r.ia_stages?.[j]?.events ?? r.events_IA);
+    const utils  = results.map(r => r.ia_stages?.[j]?.utility ?? r.utility_IA);
+    const cvs    = results.map(r => (r.ia_stages?.[j]?.cv ?? r.cv_IA).toFixed(3));
+    const opt    = optimal_IAs?.[j] ?? optimal_IA;
+    const optEv  = opt.ia_stages?.[j]?.events  ?? opt.events_IA;
+    const optUt  = opt.ia_stages?.[j]?.utility ?? opt.utility_IA;
+    const optCv  = (opt.ia_stages?.[j]?.cv ?? opt.cv_IA).toFixed(3);
+    const optPow = opt.power;
+    const sorted = [...results].sort((a, b) =>
+      (a.ia_stages?.[j]?.utility ?? a.utility_IA) - (b.ia_stages?.[j]?.utility ?? b.utility_IA)
+    );
+    return { events, utils, cvs, opt, optEv, optUt, optCv, optPow, sorted };
+  });
+
   const eventsFA  = results.map(r => r.events_FA);
-  const utilIA    = results.map(r => r.utility_IA);
   const utilFA    = results.map(r => r.utility_FA);
-  const cvIA      = results.map(r => r.cv_IA.toFixed(3));
   const cvFA      = results.map(r => r.cv_FA.toFixed(3));
   const powerLbls = results.map(r => `${r.power}%`);
+  const sortedFA  = [...results].sort((a, b) => a.utility_FA - b.utility_FA);
 
-  // Shared x range
-  const xMin = Math.min(...eventsIA) * 0.95;
-  const xMax = Math.max(...eventsFA) * 1.02;
+  // Shared x range across all analyses
+  const allEvents = [
+    ...stagesData.flatMap(s => s.events),
+    ...eventsFA,
+  ];
+  const xMin   = Math.min(...allEvents) * 0.95;
+  const xMax   = Math.max(...allEvents) * 1.02;
   const xRange = [xMin, xMax];
 
-  // y-axis ranges with top headroom so the star callout text sits comfortably
-  // below the top of the chart rather than crammed against it.
-  const yMinIA  = Math.min(...utilIA);
-  const yMaxIA  = Math.max(...utilIA);
-  const yMinFA  = Math.min(...utilFA);
-  const yMaxFA  = Math.max(...utilFA);
-  const yRangeIA  = [yMinIA  - (yMaxIA  - yMinIA)  * 0.06, yMaxIA  + (yMaxIA  - yMinIA)  * 0.18];
-  const yRangeFA  = [yMinFA  - (yMaxFA  - yMinFA)  * 0.06, yMaxFA  + (yMaxFA  - yMinFA)  * 0.18];
-  const yRangeAll = [
-    Math.min(yMinIA, yMinFA) - (Math.max(yMaxIA, yMaxFA) - Math.min(yMinIA, yMinFA)) * 0.06,
-    Math.max(yMaxIA, yMaxFA) + (Math.max(yMaxIA, yMaxFA) - Math.min(yMinIA, yMinFA)) * 0.18,
-  ];
+  // y ranges
+  const yRangeFA  = yHeadroom(utilFA);
+  const yRangeAll = yHeadroom([
+    ...stagesData.flatMap(s => s.utils),
+    ...utilFA,
+  ]);
 
-  // Initial CV tick arrays — every-other for single charts (always includes
-  // the optimal event so its CV value is visible), every-3rd for the overlay
-  // with FA starting at index 3 to avoid labels crowding the left edge of the curve.
-  const iaInit    = makeInitTicks(eventsIA, cvIA, optimal_IA.events_IA, 2);
-  const faInit    = makeInitTicks(eventsFA, cvFA, optimal_FA.events_FA, 2);
-  const ovlIAInit = makeInitTicks(eventsIA, cvIA, optimal_IA.events_IA, 3);
-  const ovlFAInit = makeInitTicks(eventsFA, cvFA, optimal_FA.events_FA, 3, 3);
-
-  // Sorted utility → power% for right y-axis labels
-  const sortedIA = [...results].sort((a, b) => a.utility_IA - b.utility_IA);
-  const sortedFA = [...results].sort((a, b) => a.utility_FA - b.utility_FA);
-
-  // ── Dynamic CV tick density ───────────────────────────────────────────
-  // Fires on x-range changes; recomputes which CV ticks to show based on
-  // how many data points are currently in view. Only touches xaxis2/xaxis3.
+  // ── Dynamic CV tick density ─────────────────────────────────────────────
   const makeCvRelayout = (
     divRef: HTMLElement | null,
     axes: { key: string; events: number[]; labels: string[]; optEvent: number }[],
@@ -116,18 +120,18 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     const update: Record<string, unknown> = {};
     axes.forEach(({ key, events, labels, optEvent }) => {
       const labelMap = new Map(events.map((e, i) => [e, labels[i]]));
-      const visible = events.filter(e => e >= lo && e <= hi);
-      const n = visible.length;
-      const stride = n > 12 ? 3 : n > 6 ? 2 : 1;
-      const strided = visible.filter((_, i) => i % stride === 0);
-      const unique = [...new Set([...strided, ...(visible.includes(optEvent) ? [optEvent] : [])])].sort((a, b) => a - b);
+      const visible  = events.filter(e => e >= lo && e <= hi);
+      const n        = visible.length;
+      const stride   = n > 12 ? 3 : n > 6 ? 2 : 1;
+      const strided  = visible.filter((_, i) => i % stride === 0);
+      const unique   = [...new Set([...strided, ...(visible.includes(optEvent) ? [optEvent] : [])])].sort((a, b) => a - b);
       update[`${key}.tickvals`] = unique;
       update[`${key}.ticktext`] = unique.map(e => labelMap.get(e) ?? "");
     });
     getPlotly().relayout(divRef, update);
   };
 
-  // ── Helpers ───────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────
   const resetView = (div: HTMLElement | null, axes: string[]) => {
     if (!div || !getPlotly()) return;
     const update: Record<string, unknown> = {};
@@ -140,9 +144,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     getPlotly().downloadImage(div, { format: "png", filename: name, scale: 2 });
   };
 
-  const ChartButtons = ({
-    div, name, axes,
-  }: { div: HTMLElement | null; name: string; axes: string[] }) => (
+  const ChartButtons = ({ div, name, axes }: { div: HTMLElement | null; name: string; axes: string[] }) => (
     <div className="flex justify-end gap-2">
       <Button variant="outline" size="sm" onClick={() => resetView(div, axes)}
         className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs h-7">
@@ -155,7 +157,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     </div>
   );
 
-  // ── Single-analysis chart layout factory ─────────────────────────────
+  // ── Single-analysis chart layout factory ───────────────────────────────
   const singleLayout = (
     events_init: number[],
     cvLabels_init: string[],
@@ -163,49 +165,52 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     utilKey: "utility_IA" | "utility_FA",
     accentColor: string,
     yRange: number[],
-  ): Partial<Plotly.Layout> => ({
-    paper_bgcolor: "transparent",
-    plot_bgcolor:  "#f8faf9",
-    showlegend:    false,
-    font:   { family: "Inter, sans-serif", color: "#3f4444" },
-    // l:62 gives the y-axis title a few extra pixels away from the card edge
-    margin: { t: 76, r: 56, b: 50, l: 62 },
-    hovermode: "closest",
-    xaxis: {
-      ...baseAxis,
-      title: { text: "Events" },
-      range: xRange,
-    } as Partial<Plotly.LayoutAxis>,
-    xaxis2: {
-      overlaying: "x", side: "top",
-      matches: "x",
-      tickvals: events_init, ticktext: cvLabels_init,
-      tickangle: -45,
-      tickfont: { color: accentColor, size: 9 },
-      title: { text: "Critical Value (HR)", font: { color: accentColor, size: 10 } },
-      range: xRange, showgrid: false, zeroline: false,
-      showline: true, linecolor: accentColor, ticks: "outside",
-    } as Partial<Plotly.LayoutAxis>,
-    // Explicit y range gives 18% headroom above the max utility so the star's
-    // CV text label sits well within the chart rather than near the top edge.
-    yaxis: {
-      ...baseAxis,
-      title: { text: "Utility Score" },
-      range: yRange,
-    } as Partial<Plotly.LayoutAxis>,
-    yaxis2: {
-      overlaying: "y", side: "right",
-      tickvals: sortedRows.map(r => r[utilKey]),
-      ticktext: sortedRows.map(r => `${r.power}%`),
-      tickfont: { color: accentColor, size: 9 },
-      title: { text: "Power %", font: { color: accentColor, size: 10 } },
-      showgrid: false, zeroline: false,
-      showline: true, linecolor: accentColor, ticks: "outside",
-    } as Partial<Plotly.LayoutAxis>,
-  });
+    utilExtractor?: (r: DesignResult) => number,
+  ): Partial<Plotly.Layout> => {
+    const getUtil = utilExtractor ?? ((r: DesignResult) => r[utilKey]);
+    return {
+      paper_bgcolor: "transparent",
+      plot_bgcolor:  "#f8faf9",
+      showlegend:    false,
+      font:   { family: "Inter, sans-serif", color: "#3f4444" },
+      margin: { t: 76, r: 56, b: 50, l: 62 },
+      hovermode: "closest",
+      xaxis: {
+        ...baseAxis,
+        title: { text: "Events" },
+        range: xRange,
+      } as Partial<Plotly.LayoutAxis>,
+      xaxis2: {
+        overlaying: "x", side: "top",
+        matches: "x",
+        tickvals: events_init, ticktext: cvLabels_init,
+        tickangle: -45,
+        tickfont: { color: accentColor, size: 9 },
+        title: { text: "Critical Value (HR)", font: { color: accentColor, size: 10 } },
+        range: xRange, showgrid: false, zeroline: false,
+        showline: true, linecolor: accentColor, ticks: "outside",
+      } as Partial<Plotly.LayoutAxis>,
+      yaxis: {
+        ...baseAxis,
+        title: { text: "Utility Score" },
+        range: yRange,
+      } as Partial<Plotly.LayoutAxis>,
+      yaxis2: {
+        overlaying: "y", side: "right",
+        tickvals: sortedRows.map(r => getUtil(r)),
+        ticktext: sortedRows.map(r => `${r.power}%`),
+        tickfont: { color: accentColor, size: 9 },
+        title: { text: "Power %", font: { color: accentColor, size: 10 } },
+        showgrid: false, zeroline: false,
+        showline: true, linecolor: accentColor, ticks: "outside",
+      } as Partial<Plotly.LayoutAxis>,
+    };
+  };
 
-  // Optimal-star trace helper — cliponaxis:false lets the CV text label
-  // render beyond the plot boundary without being clipped.
+  // Optimal-star trace
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type PlotlyTrace = any;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const optStar = (x: number, y: number, cv: string, power: number, color: string, label: string): any => ({
     x: [x], y: [y],
@@ -219,16 +224,21 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     showlegend: false, xaxis: "x", yaxis: "y",
   });
 
-  // ── IA data ───────────────────────────────────────────────────────────
+  // ── IA chart (active tab) ─────────────────────────────────────────────
+  const iaSt     = stagesData[activeIA];
+  const iaColor  = IA_COLORS[activeIA % IA_COLORS.length];
+  const iaOptCol = IA_OPT_COLORS[activeIA % IA_OPT_COLORS.length];
+  const iaInit   = makeInitTicks(iaSt.events, iaSt.cvs, iaSt.optEv, 2);
+
   const iaData: Plotly.Data[] = [
     {
-      x: eventsIA, y: utilIA, type: "scatter", mode: "lines+markers",
-      line: { color: C.ia, width: 2.5 }, marker: { color: C.ia, size: 6 },
-      text: powerLbls, customdata: results.map(r => r.cv_IA),
+      x: iaSt.events, y: iaSt.utils, type: "scatter", mode: "lines+markers",
+      line: { color: iaColor, width: 2.5 }, marker: { color: iaColor, size: 6 },
+      text: powerLbls, customdata: results.map(r => r.ia_stages?.[activeIA]?.cv ?? r.cv_IA),
       hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
       showlegend: false, xaxis: "x", yaxis: "y",
     },
-    optStar(optimal_IA.events_IA, optimal_IA.utility_IA, optimal_IA.cv_IA.toFixed(3), optimal_IA.power, C.iaOpt, "Optimal IA"),
+    optStar(iaSt.optEv, iaSt.optUt, iaSt.optCv, iaSt.optPow, iaOptCol, `Optimal IA${numIAs > 1 ? ` ${activeIA + 1}` : ""}`),
     {
       x: iaInit.vals, y: iaInit.vals.map(() => null as unknown as number),
       type: "scatter", mode: "markers",
@@ -237,16 +247,25 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     },
   ];
 
-  // ── FA data ───────────────────────────────────────────────────────────
+  const iaYRange = yHeadroom(iaSt.utils);
+  const iaLayout = singleLayout(
+    iaInit.vals, iaInit.labels, iaSt.sorted,
+    "utility_IA", iaColor, iaYRange,
+    (r) => r.ia_stages?.[activeIA]?.utility ?? r.utility_IA,
+  );
+
+  // ── FA chart ──────────────────────────────────────────────────────────
+  const faInit = makeInitTicks(eventsFA, cvFA, optimal_FA.events_FA, 2);
+
   const faData: Plotly.Data[] = [
     {
       x: eventsFA, y: utilFA, type: "scatter", mode: "lines+markers",
-      line: { color: C.fa, width: 2.5, dash: "dot" }, marker: { color: C.fa, size: 6 },
+      line: { color: FA_COLOR, width: 2.5, dash: "dot" }, marker: { color: FA_COLOR, size: 6 },
       text: powerLbls, customdata: results.map(r => r.cv_FA),
       hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
       showlegend: false, xaxis: "x", yaxis: "y",
     },
-    optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, C.faOpt, "Optimal FA"),
+    optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, FA_OPT_COLOR, "Optimal FA"),
     {
       x: faInit.vals, y: faInit.vals.map(() => null as unknown as number),
       type: "scatter", mode: "markers",
@@ -255,98 +274,149 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
     },
   ];
 
-  // ── Overlay data ──────────────────────────────────────────────────────
-  const overlayData: Plotly.Data[] = [
-    {
-      x: eventsIA, y: utilIA, type: "scatter", mode: "lines+markers",
-      visible: vis[0] ? true : "legendonly",
-      line: { color: C.ia, width: 2.5 }, marker: { color: C.ia, size: 6 },
-      text: powerLbls, customdata: results.map(r => r.cv_IA),
-      hovertemplate: "<b>IA Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
-      showlegend: false, xaxis: "x", yaxis: "y",
-    },
-    { ...optStar(optimal_IA.events_IA, optimal_IA.utility_IA, optimal_IA.cv_IA.toFixed(3), optimal_IA.power, C.iaOpt, "Optimal IA"),
-      visible: vis[1] ? true : "legendonly" },
+  // ── Overlay ───────────────────────────────────────────────────────────
+  // For k=2: show IA+FA CV axes (existing behaviour)
+  // For k>2: drop CV top-axes (too many), rely on star callout annotations only
+
+  // Using PlotlyTrace (any) for the overlay array to avoid Plotly.Data union type issues with `visible`
+  const overlayData: PlotlyTrace[] = [
+    // IA stage curves
+    ...stagesData.flatMap((st, j) => {
+      const col    = IA_COLORS[j % IA_COLORS.length];
+      const optCol = IA_OPT_COLORS[j % IA_OPT_COLORS.length];
+      const label  = numIAs === 1 ? "Interim Analysis" : `IA Stage ${j + 1}`;
+      return [
+        {
+          x: st.events, y: st.utils, type: "scatter", mode: "lines+markers",
+          visible: vis[j] ? true : "legendonly",
+          line: { color: col, width: 2.5 }, marker: { color: col, size: 6 },
+          text: powerLbls, customdata: results.map(r => r.ia_stages?.[j]?.cv ?? r.cv_IA),
+          hovertemplate: `<b>${label} Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>`,
+          showlegend: false, xaxis: "x", yaxis: "y",
+        },
+        {
+          ...optStar(st.optEv, st.optUt, st.optCv, st.optPow, optCol, `Optimal ${label}`),
+          visible: vis[j] ? true : "legendonly",
+        },
+      ];
+    }),
+    // FA curve
     {
       x: eventsFA, y: utilFA, type: "scatter", mode: "lines+markers",
-      visible: vis[2] ? true : "legendonly",
-      line: { color: C.fa, width: 2.5, dash: "dot" }, marker: { color: C.fa, size: 6 },
+      visible: vis[numIAs] ? true : "legendonly",
+      line: { color: FA_COLOR, width: 2.5, dash: "dot" }, marker: { color: FA_COLOR, size: 6 },
       text: powerLbls, customdata: results.map(r => r.cv_FA),
       hovertemplate: "<b>FA Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
       showlegend: false, xaxis: "x", yaxis: "y",
     },
-    { ...optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, C.faOpt, "Optimal FA"),
-      visible: vis[3] ? true : "legendonly" },
-    // invisible traces to activate xaxis2 (IA CVs) and xaxis3 (FA CVs)
     {
-      x: ovlIAInit.vals, y: ovlIAInit.vals.map(() => null as unknown as number),
-      type: "scatter", mode: "markers",
-      marker: { opacity: 0, size: 1 }, showlegend: false,
-      xaxis: "x2", yaxis: "y", hoverinfo: "skip" as const,
+      ...optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, FA_OPT_COLOR, "Optimal FA"),
+      visible: vis[numIAs] ? true : "legendonly",
     },
-    {
-      x: ovlFAInit.vals, y: ovlFAInit.vals.map(() => null as unknown as number),
-      type: "scatter", mode: "markers",
-      marker: { opacity: 0, size: 1 }, showlegend: false,
-      xaxis: "x3", yaxis: "y", hoverinfo: "skip" as const,
-    },
+    // CV axis anchoring traces — only for k=2
+    ...(numK === 2 ? [
+      (() => {
+        const ovlIAInit = makeInitTicks(stagesData[0].events, stagesData[0].cvs, stagesData[0].optEv, 3);
+        const ovlFAInit = makeInitTicks(eventsFA, cvFA, optimal_FA.events_FA, 3, 3);
+        return [
+          {
+            x: ovlIAInit.vals, y: ovlIAInit.vals.map(() => null as unknown as number),
+            type: "scatter", mode: "markers",
+            marker: { opacity: 0, size: 1 }, showlegend: false,
+            xaxis: "x2", yaxis: "y", hoverinfo: "skip" as const,
+          } as Plotly.Data,
+          {
+            x: ovlFAInit.vals, y: ovlFAInit.vals.map(() => null as unknown as number),
+            type: "scatter", mode: "markers",
+            marker: { opacity: 0, size: 1 }, showlegend: false,
+            xaxis: "x3", yaxis: "y", hoverinfo: "skip" as const,
+          } as Plotly.Data,
+        ];
+      })(),
+    ].flat() : []),
   ];
 
-  const overlayLayout: Partial<Plotly.Layout> = {
-    paper_bgcolor: "transparent",
-    plot_bgcolor:  "#f8faf9",
-    showlegend:    false,
-    font:   { family: "Inter, sans-serif", color: "#3f4444" },
-    margin: { t: 112, r: 60, b: 52, l: 62 },
-    hovermode: "closest",
-    xaxis: {
-      ...baseAxis,
-      title: { text: "Number of Events" },
-      range: xRange,
-    } as Partial<Plotly.LayoutAxis>,
-    xaxis2: {
-      overlaying: "x", side: "top",
-      matches: "x",
-      tickvals: ovlIAInit.vals, ticktext: ovlIAInit.labels,
-      tickangle: -45,
-      tickfont: { color: C.ia, size: 9 },
-      title: { text: "IA Critical Value (HR)", font: { color: C.ia, size: 10 } },
-      range: xRange, showgrid: false, zeroline: false,
-      showline: true, linecolor: C.ia, ticks: "outside",
-    } as Partial<Plotly.LayoutAxis>,
-    xaxis3: {
-      overlaying: "x", side: "top",
-      matches: "x",
-      anchor: "free", position: 1.15,
-      tickvals: ovlFAInit.vals, ticktext: ovlFAInit.labels,
-      tickangle: -45,
-      tickfont: { color: C.fa, size: 9 },
-      title: { text: "FA Critical Value (HR)", font: { color: C.fa, size: 10 } },
-      range: xRange, showgrid: false, zeroline: false,
-      showline: true, linecolor: C.fa, ticks: "outside",
-    } as Partial<Plotly.LayoutAxis>,
-    yaxis: {
-      ...baseAxis,
-      title: { text: "Utility Score" },
-      range: yRangeAll,
-    } as Partial<Plotly.LayoutAxis>,
-    yaxis2: {
-      overlaying: "y", side: "right",
-      tickvals: sortedIA.map(r => r.utility_IA),
-      ticktext: sortedIA.map(r => `${r.power}%`),
-      tickfont: { color: C.ia, size: 9 },
-      title: { text: "Power % (IA)", font: { color: C.ia, size: 10 } },
-      showgrid: false, zeroline: false,
-      showline: true, linecolor: C.ia, ticks: "outside",
-    } as Partial<Plotly.LayoutAxis>,
-  };
+  const overlayLayout: Partial<Plotly.Layout> = (() => {
+    const base: Partial<Plotly.Layout> = {
+      paper_bgcolor: "transparent",
+      plot_bgcolor:  "#f8faf9",
+      showlegend:    false,
+      font:   { family: "Inter, sans-serif", color: "#3f4444" },
+      margin: { t: numK === 2 ? 112 : 76, r: 60, b: 52, l: 62 },
+      hovermode: "closest",
+      xaxis: {
+        ...baseAxis,
+        title: { text: "Number of Events" },
+        range: xRange,
+      } as Partial<Plotly.LayoutAxis>,
+      yaxis: {
+        ...baseAxis,
+        title: { text: "Utility Score" },
+        range: yRangeAll,
+      } as Partial<Plotly.LayoutAxis>,
+      yaxis2: {
+        overlaying: "y", side: "right",
+        tickvals: sortedFA.map(r => r.utility_FA),
+        ticktext: sortedFA.map(r => `${r.power}%`),
+        tickfont: { color: FA_COLOR, size: 9 },
+        title: { text: "Power % (FA)", font: { color: FA_COLOR, size: 10 } },
+        showgrid: false, zeroline: false,
+        showline: true, linecolor: FA_COLOR, ticks: "outside",
+      } as Partial<Plotly.LayoutAxis>,
+    };
 
-  // ── Overlay legend ────────────────────────────────────────────────────
-  const overlayLegend = [
-    { label: "Interim Analysis",                  color: C.ia,    dash: false, star: false, i: 0 },
-    { label: `Optimal IA (${optimal_IA.power}%)`, color: C.iaOpt, dash: false, star: true,  i: 1 },
-    { label: "Final Analysis",                    color: C.fa,    dash: true,  star: false, i: 2 },
-    { label: `Optimal FA (${optimal_FA.power}%)`, color: C.faOpt, dash: true,  star: true,  i: 3 },
+    if (numK === 2) {
+      const ovlIAInit = makeInitTicks(stagesData[0].events, stagesData[0].cvs, stagesData[0].optEv, 3);
+      const ovlFAInit = makeInitTicks(eventsFA, cvFA, optimal_FA.events_FA, 3, 3);
+      return {
+        ...base,
+        xaxis2: {
+          overlaying: "x", side: "top", matches: "x",
+          tickvals: ovlIAInit.vals, ticktext: ovlIAInit.labels,
+          tickangle: -45,
+          tickfont: { color: IA_COLORS[0], size: 9 },
+          title: { text: "IA Critical Value (HR)", font: { color: IA_COLORS[0], size: 10 } },
+          range: xRange, showgrid: false, zeroline: false,
+          showline: true, linecolor: IA_COLORS[0], ticks: "outside",
+        } as Partial<Plotly.LayoutAxis>,
+        xaxis3: {
+          overlaying: "x", side: "top", matches: "x",
+          anchor: "free", position: 1.15,
+          tickvals: ovlFAInit.vals, ticktext: ovlFAInit.labels,
+          tickangle: -45,
+          tickfont: { color: FA_COLOR, size: 9 },
+          title: { text: "FA Critical Value (HR)", font: { color: FA_COLOR, size: 10 } },
+          range: xRange, showgrid: false, zeroline: false,
+          showline: true, linecolor: FA_COLOR, ticks: "outside",
+        } as Partial<Plotly.LayoutAxis>,
+      };
+    }
+    return base;
+  })();
+
+  const AXES_SINGLE_IA  = ["xaxis", "xaxis2", "yaxis"];
+  const AXES_FA         = ["xaxis", "xaxis2", "yaxis"];
+  const AXES_OVERLAY_K2 = ["xaxis", "xaxis2", "xaxis3", "yaxis"];
+  const AXES_OVERLAY_KN = ["xaxis", "yaxis"];
+
+  // ── Overlay legend items ───────────────────────────────────────────────
+  const overlayLegendItems = [
+    ...stagesData.map((st, j) => ({
+      label: numIAs === 1 ? `Interim Analysis` : `IA Stage ${j + 1}`,
+      optLabel: numIAs === 1 ? `Optimal IA (${st.optPow}%)` : `Optimal IA${j + 1} (${st.optPow}%)`,
+      color: IA_COLORS[j % IA_COLORS.length],
+      optColor: IA_OPT_COLORS[j % IA_OPT_COLORS.length],
+      visIdx: j,
+      dash: false,
+    })),
+    {
+      label: "Final Analysis",
+      optLabel: `Optimal FA (${optimal_FA.power}%)`,
+      color: FA_COLOR,
+      optColor: FA_OPT_COLOR,
+      visIdx: numIAs,
+      dash: true,
+    },
   ];
 
   return (
@@ -355,37 +425,63 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
       {/* ── Side-by-side IA / FA ── */}
       <div className="grid grid-cols-2 gap-3">
 
-        {/* IA */}
+        {/* IA (with optional tabs for k>2) */}
         <div className="rounded-xl border border-az-light-platinum bg-white shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-5 pt-4 pb-1">
-            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: C.ia }} />
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: IA_COLORS[activeIA % IA_COLORS.length] }} />
             <h3 className="text-xs font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
-              Interim Analysis
+              {numIAs === 1 ? "Interim Analysis" : `Interim Analysis — Stage ${activeIA + 1}`}
             </h3>
             <span className="text-[10px] text-az-platinum ml-auto whitespace-nowrap">
-              Optimal: {optimal_IA.power}% power · CV {optimal_IA.cv_IA.toFixed(3)}
+              Optimal: {iaSt.optPow}% power · CV {iaSt.optCv}
             </span>
           </div>
+
+          {/* Tab strip for k>2 */}
+          {numIAs > 1 && (
+            <div className="flex gap-1 px-5 pb-1">
+              {stagesData.map((_, j) => (
+                <button
+                  key={j}
+                  onClick={() => setActiveIA(j)}
+                  className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors ${
+                    activeIA === j
+                      ? "text-white"
+                      : "text-az-graphite bg-az-light-platinum hover:bg-az-platinum/30"
+                  }`}
+                  style={activeIA === j ? { background: IA_COLORS[j % IA_COLORS.length] } : {}}
+                >
+                  IA {j + 1}
+                </button>
+              ))}
+            </div>
+          )}
+
           <Plot
+            key={`ia-${activeIA}`}
             data={iaData}
-            layout={singleLayout(iaInit.vals, iaInit.labels, sortedIA, "utility_IA", C.ia, yRangeIA)}
+            layout={iaLayout}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: "100%", height: "340px" }}
-            onInitialized={(_, div) => setIaDiv(div)}
-            onUpdate={(_, div) => setIaDiv(div)}
-            onRelayout={makeCvRelayout(iaDiv, [
-              { key: "xaxis2", events: eventsIA, labels: cvIA, optEvent: optimal_IA.events_IA },
+            onInitialized={(_, div) => setIaDivs(prev => prev.map((d, i) => i === activeIA ? div : d))}
+            onUpdate={(_, div)       => setIaDivs(prev => prev.map((d, i) => i === activeIA ? div : d))}
+            onRelayout={makeCvRelayout(iaDivs[activeIA], [
+              { key: "xaxis2", events: iaSt.events, labels: iaSt.cvs, optEvent: iaSt.optEv },
             ])}
           />
           <div className="flex justify-end gap-2 px-5 pb-4 pt-2">
-            <ChartButtons div={iaDiv} name="gs-intersect-IA" axes={AXES_SINGLE} />
+            <ChartButtons
+              div={iaDivs[activeIA]}
+              name={`gs-intersect-IA${numIAs > 1 ? activeIA + 1 : ""}`}
+              axes={AXES_SINGLE_IA}
+            />
           </div>
         </div>
 
         {/* FA */}
         <div className="rounded-xl border border-az-light-platinum bg-white shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-5 pt-4 pb-1">
-            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: C.fa }} />
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: FA_COLOR }} />
             <h3 className="text-xs font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
               Final Analysis
             </h3>
@@ -395,17 +491,17 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
           </div>
           <Plot
             data={faData}
-            layout={singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", C.fa, yRangeFA)}
+            layout={singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", FA_COLOR, yRangeFA)}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: "100%", height: "340px" }}
             onInitialized={(_, div) => setFaDiv(div)}
-            onUpdate={(_, div) => setFaDiv(div)}
+            onUpdate={(_, div)       => setFaDiv(div)}
             onRelayout={makeCvRelayout(faDiv, [
               { key: "xaxis2", events: eventsFA, labels: cvFA, optEvent: optimal_FA.events_FA },
             ])}
           />
           <div className="flex justify-end gap-2 px-5 pb-4 pt-2">
-            <ChartButtons div={faDiv} name="gs-intersect-FA" axes={AXES_SINGLE} />
+            <ChartButtons div={faDiv} name="gs-intersect-FA" axes={AXES_FA} />
           </div>
         </div>
       </div>
@@ -416,7 +512,9 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
           <h3 className="text-xs font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
             Combined View
           </h3>
-          <span className="text-[10px] text-az-platinum">IA + FA overlaid</span>
+          <span className="text-[10px] text-az-platinum">
+            {numIAs === 1 ? "IA + FA overlaid" : `${numIAs} IAs + FA overlaid`}
+          </span>
         </div>
 
         <Plot
@@ -425,37 +523,42 @@ export function UtilityChart({ results, optimal_IA, optimal_FA }: Props) {
           config={{ displayModeBar: false, responsive: true }}
           style={{ width: "100%", height: "460px" }}
           onInitialized={(_, div) => setOverlayDiv(div)}
-          onUpdate={(_, div) => setOverlayDiv(div)}
-          onRelayout={makeCvRelayout(overlayDiv, [
-            { key: "xaxis2", events: eventsIA, labels: cvIA, optEvent: optimal_IA.events_IA },
-            { key: "xaxis3", events: eventsFA, labels: cvFA, optEvent: optimal_FA.events_FA },
-          ])}
+          onUpdate={(_, div)       => setOverlayDiv(div)}
+          onRelayout={numK === 2
+            ? makeCvRelayout(overlayDiv, [
+                { key: "xaxis2", events: stagesData[0].events, labels: stagesData[0].cvs, optEvent: stagesData[0].optEv },
+                { key: "xaxis3", events: eventsFA, labels: cvFA, optEvent: optimal_FA.events_FA },
+              ])
+            : () => undefined}
         />
 
         {/* Legend + controls row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 pb-4 pt-2">
           <div className="flex flex-wrap gap-x-5 gap-y-2">
-            {overlayLegend.map(({ label, color, dash, star, i }) => (
+            {overlayLegendItems.map(({ label, optLabel, color, optColor, visIdx, dash }) => (
               <button
-                key={i}
-                onClick={() => setVis(v => v.map((val, idx) => idx === i ? !val : val))}
-                className={`flex items-center gap-1.5 text-xs transition-opacity ${vis[i] ? "opacity-100" : "opacity-35"}`}
+                key={visIdx}
+                onClick={() => setVis(v => v.map((val, idx) => idx === visIdx ? !val : val))}
+                className={`flex items-center gap-1.5 text-xs transition-opacity ${vis[visIdx] ? "opacity-100" : "opacity-35"}`}
               >
-                {star ? (
-                  <svg width="14" height="14" viewBox="0 0 14 14">
-                    <polygon points="7,1 8.5,5.5 13,5.5 9.5,8.5 10.8,13 7,10.2 3.2,13 4.5,8.5 1,5.5 5.5,5.5" fill={color} />
-                  </svg>
-                ) : (
-                  <svg width="22" height="10" viewBox="0 0 22 10">
-                    <line x1="0" y1="5" x2="22" y2="5" stroke={color} strokeWidth="2.5" strokeDasharray={dash ? "4 3" : "none"} />
-                    <circle cx="11" cy="5" r="3.5" fill={color} />
-                  </svg>
-                )}
+                <svg width="22" height="10" viewBox="0 0 22 10">
+                  <line x1="0" y1="5" x2="22" y2="5" stroke={color} strokeWidth="2.5" strokeDasharray={dash ? "4 3" : "none"} />
+                  <circle cx="11" cy="5" r="3.5" fill={color} />
+                </svg>
                 <span className="text-az-graphite font-medium">{label}</span>
+                {/* Optimal star inline */}
+                <svg width="10" height="10" viewBox="0 0 14 14" className="ml-0.5">
+                  <polygon points="7,1 8.5,5.5 13,5.5 9.5,8.5 10.8,13 7,10.2 3.2,13 4.5,8.5 1,5.5 5.5,5.5" fill={optColor} />
+                </svg>
+                <span className="text-az-graphite">{optLabel}</span>
               </button>
             ))}
           </div>
-          <ChartButtons div={overlayDiv} name="gs-intersect-combined" axes={AXES_OVERLAY} />
+          <ChartButtons
+            div={overlayDiv}
+            name="gs-intersect-combined"
+            axes={numK === 2 ? AXES_OVERLAY_K2 : AXES_OVERLAY_KN}
+          />
         </div>
 
         <p className="text-[11px] text-az-platinum px-5 pb-3">

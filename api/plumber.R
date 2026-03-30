@@ -24,7 +24,7 @@ function(req) {
 
   k        <- as.integer(body$k %||% 2)
   alpha    <- as.numeric(body$alpha %||% 0.05)
-  timing   <- as.numeric(body$timing %||% 0.7)
+  timing_raw <- as.numeric(body$timing %||% 0.7)
   hr       <- as.numeric(body$hr %||% 0.7)
   medianC  <- as.numeric(body$medianC %||% 12)
   eta      <- as.numeric(body$eta %||% 0.05)
@@ -36,6 +36,17 @@ function(req) {
 
   sfu <- get(sfu_name)
   sfl <- get(sfl_name)
+
+  # Build timing vector of length k-1.
+  # If user provided fewer values than needed, replicate the last value.
+  n_timings <- k - 1
+  if (n_timings == 0) {
+    timing_gs <- numeric(0)
+  } else if (length(timing_raw) >= n_timings) {
+    timing_gs <- timing_raw[seq_len(n_timings)]
+  } else {
+    timing_gs <- c(timing_raw, rep(timing_raw[length(timing_raw)], n_timings - length(timing_raw)))
+  }
 
   lambdaC <- 1 / medianC
   T_total <- sum(R) + minfup
@@ -54,7 +65,7 @@ function(req) {
         alpha = alpha / 2,
         beta = 1 - pwr_seq[i],
         astar = astar,
-        timing = if (k > 1) rep(timing, k - 1) else timing,
+        timing = if (n_timings > 0) timing_gs else NULL,
         sfu = sfu, sfupar = 0,
         sfl = sfl, sflpar = 0,
         lambdaC = lambdaC, hr = hr, hr0 = 1,
@@ -65,26 +76,52 @@ function(req) {
       tgS <- gsBoundSummary(x, ratio = 1, digits = 4, ddigits = 2,
                             tdigits = 1, timename = "Month")
 
-      N_total  <- as.integer(strsplit(tgS[2, 1], ":")[[1]][2])
-      Ne_IA    <- as.integer(strsplit(tgS[3, 1], ":")[[1]][2])
-      Ne_FA    <- as.integer(strsplit(tgS[8, 1], ":")[[1]][2])
-      fp_IA_FA <- as.numeric(tgS[c(2, 7), 3])
-      cpwr     <- as.numeric(tgS[c(5, 10), 3])
-      cv       <- as.numeric(tgS[c(3, 8), 3])
-      calpha   <- 2 * fp_IA_FA
+      # Total N is always in the first analysis block, row 2, col 1: "N: <value>"
+      N_total <- as.integer(strsplit(tgS[2, 1], ":")[[1]][2])
 
-      lr_pos   <- cpwr / calpha
-      utility  <- (1 - cv) * lr_pos
+      # Extract all k analyses using 5-rows-per-analysis formula:
+      #   Analysis j (1-indexed): N/fp at row 2+(j-1)*5
+      #                            Events/CV at row 3+(j-1)*5
+      #                            Power at row 5+(j-1)*5
+      all_stages <- vector("list", k)
+      for (j in seq_len(k)) {
+        row_n  <- 2 + (j - 1) * 5   # N / false-positive row
+        row_cv <- 3 + (j - 1) * 5   # Events / CV row
+        row_pw <- 5 + (j - 1) * 5   # Cumulative power row
 
+        ne_j   <- as.integer(strsplit(tgS[row_cv, 1], ":")[[1]][2])
+        fp_j   <- as.numeric(tgS[row_n,  3])
+        cv_j   <- as.numeric(tgS[row_cv, 3])
+        cpwr_j <- as.numeric(tgS[row_pw, 3])
+
+        calpha_j  <- 2 * fp_j
+        lr_j      <- cpwr_j / calpha_j
+        utility_j <- (1 - cv_j) * lr_j
+
+        all_stages[[j]] <- list(
+          events  = ne_j,
+          cv      = round(cv_j, 4),
+          utility = round(utility_j, 4),
+          fp      = round(fp_j, 6),
+          power   = round(cpwr_j * 100, 1)
+        )
+      }
+
+      # IA stages (analyses 1 to k-1); FA is analysis k
+      ia_stages <- all_stages[seq_len(k - 1)]
+      fa_stage  <- all_stages[[k]]
+
+      # Backward-compatible top-level fields use IA stage 1 and FA
       results[[i]] <- list(
-        power     = round(pwr_seq[i] * 100, 1),
-        N         = N_total,
-        events_IA = Ne_IA,
-        events_FA = Ne_FA,
-        cv_IA     = round(cv[1], 4),
-        cv_FA     = round(cv[2], 4),
-        utility_IA = round(utility[1], 4),
-        utility_FA = round(utility[2], 4)
+        power      = round(pwr_seq[i] * 100, 1),
+        N          = N_total,
+        events_IA  = ia_stages[[1]]$events,
+        events_FA  = fa_stage$events,
+        cv_IA      = ia_stages[[1]]$cv,
+        cv_FA      = fa_stage$cv,
+        utility_IA = ia_stages[[1]]$utility,
+        utility_FA = fa_stage$utility,
+        ia_stages  = ia_stages   # full per-stage breakdown
       )
     }, error = function(e) {
       results[[i]] <<- NULL
@@ -93,16 +130,24 @@ function(req) {
 
   results <- Filter(Negate(is.null), results)
 
-  # Find optimal points
+  # Optimal for backward-compat top-level IA (stage 1) and FA
   u_IA <- sapply(results, `[[`, "utility_IA")
   u_FA <- sapply(results, `[[`, "utility_FA")
   opt_IA <- which.max(u_IA)
   opt_FA <- which.max(u_FA)
 
+  # Optimal per IA stage (for k>2 multi-stage UI)
+  optimal_IAs <- lapply(seq_len(k - 1), function(j) {
+    utils_j <- sapply(results, function(r) r$ia_stages[[j]]$utility)
+    results[[which.max(utils_j)]]
+  })
+
   list(
-    results      = results,
-    optimal_IA   = results[[opt_IA]],
-    optimal_FA   = results[[opt_FA]]
+    k           = k,
+    results     = results,
+    optimal_IA  = results[[opt_IA]],
+    optimal_FA  = results[[opt_FA]],
+    optimal_IAs = optimal_IAs
   )
 }
 

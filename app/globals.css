@@ -74,3 +74,27 @@
     animation: slide-in 0.3s ease-out;
   }
 }
+
+@media print {
+  .print-hidden {
+    display: none !important;
+  }
+  header, footer {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+  }
+  /* Ensure charts and result cards fill the page */
+  main {
+    padding: 0 !important;
+  }
+  /* Hide the input panel sidebar */
+  .print-hide-inputs {
+    display: none !important;
+  }
+  /* Make results area full width */
+  .print-full-width {
+    grid-column: 1 / -1 !important;
+  }
+}

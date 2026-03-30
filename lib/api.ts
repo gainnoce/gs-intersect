@@ -1,7 +1,15 @@
+export interface IAStageResult {
+  events: number;
+  cv: number;
+  utility: number;
+  fp: number;
+  power: number;
+}
+
 export interface DesignInputs {
   k: number;
   alpha: number;
-  timing: number;
+  timing: number[];   // length k-1; [0.7] for k=2, [0.5, 0.7] for k=3, etc.
   hr: number;
   medianC: number;
   eta: number;
@@ -21,13 +29,55 @@ export interface DesignResult {
   cv_FA: number;
   utility_IA: number;
   utility_FA: number;
+  ia_stages?: IAStageResult[];
 }
 
 export interface OptimizeResponse {
+  k?: number;
   results: DesignResult[];
   optimal_IA: DesignResult;
   optimal_FA: DesignResult;
+  optimal_IAs?: DesignResult[];
 }
+
+// ── URL param serialization ───────────────────────────────────────────────────
+
+export function inputsToParams(inputs: DesignInputs): URLSearchParams {
+  const p = new URLSearchParams();
+  p.set("k",       String(inputs.k));
+  p.set("alpha",   String(inputs.alpha));
+  p.set("timing",  inputs.timing.join(","));
+  p.set("hr",      String(inputs.hr));
+  p.set("medianC", String(inputs.medianC));
+  p.set("eta",     String(inputs.eta));
+  p.set("minfup",  String(inputs.minfup));
+  p.set("gamma",   inputs.gamma.join(","));
+  p.set("R",       inputs.R.join(","));
+  p.set("sfu",     inputs.sfu);
+  p.set("sfl",     inputs.sfl);
+  return p;
+}
+
+export function paramsToInputs(params: URLSearchParams): DesignInputs | null {
+  if (!params.has("k")) return null;
+  const parseArr = (s: string) =>
+    s.split(",").map(v => parseFloat(v.trim())).filter(n => !isNaN(n));
+  return {
+    k:       parseInt(params.get("k")!),
+    alpha:   parseFloat(params.get("alpha") ?? "0.05"),
+    timing:  parseArr(params.get("timing") ?? "0.7"),
+    hr:      parseFloat(params.get("hr") ?? "0.7"),
+    medianC: parseFloat(params.get("medianC") ?? "12"),
+    eta:     parseFloat(params.get("eta") ?? "0.05"),
+    minfup:  parseFloat(params.get("minfup") ?? "24"),
+    gamma:   parseArr(params.get("gamma") ?? "2.5,5,7.5,10"),
+    R:       parseArr(params.get("R") ?? "2,2,2,12"),
+    sfu:     params.get("sfu") ?? "sfLDOF",
+    sfl:     params.get("sfl") ?? "sfLDOF",
+  };
+}
+
+// ── API call ─────────────────────────────────────────────────────────────────
 
 export async function runOptimization(inputs: DesignInputs): Promise<OptimizeResponse> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -40,26 +90,48 @@ export async function runOptimization(inputs: DesignInputs): Promise<OptimizeRes
     throw new Error(`API error: ${res.status}`);
   }
   const data = await res.json();
+
+  const coerceStage = (s: Record<string, unknown>): IAStageResult => ({
+    events:  Number(s.events),
+    cv:      Number(s.cv),
+    utility: Number(s.utility),
+    fp:      Number(s.fp),
+    power:   Number(s.power),
+  });
+
   const coerce = (r: Record<string, unknown>): DesignResult => ({
-    power: Number(r.power),
-    N: Number(r.N),
-    events_IA: Number(r.events_IA),
-    events_FA: Number(r.events_FA),
-    cv_IA: Number(r.cv_IA),
-    cv_FA: Number(r.cv_FA),
+    power:      Number(r.power),
+    N:          Number(r.N),
+    events_IA:  Number(r.events_IA),
+    events_FA:  Number(r.events_FA),
+    cv_IA:      Number(r.cv_IA),
+    cv_FA:      Number(r.cv_FA),
     utility_IA: Number(r.utility_IA),
     utility_FA: Number(r.utility_FA),
+    ia_stages:  Array.isArray(r.ia_stages)
+      ? (r.ia_stages as Record<string, unknown>[]).map(coerceStage)
+      : undefined,
   });
+
   return {
-    results: data.results.map(coerce),
-    optimal_IA: coerce(data.optimal_IA),
-    optimal_FA: coerce(data.optimal_FA),
+    k:           data.k ? Number(data.k) : 2,
+    results:     data.results.map(coerce),
+    optimal_IA:  coerce(data.optimal_IA),
+    optimal_FA:  coerce(data.optimal_FA),
+    optimal_IAs: Array.isArray(data.optimal_IAs)
+      ? (data.optimal_IAs as Record<string, unknown>[]).map(coerce)
+      : undefined,
   };
 }
+
+// ── Exports ───────────────────────────────────────────────────────────────────
 
 export function exportRScript(inputs: DesignInputs, response: OptimizeResponse): void {
   const fmtVec = (arr: number[]) => `c(${arr.join(", ")})`;
   const date = new Date().toISOString().split("T")[0];
+  const timingR = inputs.timing.length === 1
+    ? String(inputs.timing[0])
+    : fmtVec(inputs.timing);
 
   const script = `\
 ########################################################################################
@@ -78,7 +150,7 @@ library(gsDesign)
 
 k          <- ${inputs.k}
 test.type  <- 4
-timing     <- ${inputs.timing}
+timing     <- ${timingR}
 alpha      <- ${inputs.alpha}          # one-sided Type I error
 eta        <- ${inputs.eta}            # dropout rate
 astar      <- 0
@@ -103,12 +175,9 @@ ratio  <- 1
 pwr_seq <- c(seq(0.10, 0.95, 0.05), 0.99)
 lpwr    <- length(pwr_seq)
 
-U1s    <- matrix(NA, lpwr, 2)
+U1s    <- matrix(NA, lpwr, k)
 Ns     <- rep(NA, lpwr)
-Ne_IA  <- rep(NA, lpwr)
 Ne_FA  <- rep(NA, lpwr)
-cv_IA  <- rep(NA, lpwr)
-cv_FA  <- rep(NA, lpwr)
 
 for (i in 1:lpwr) {
   x <- gsSurv(
@@ -126,75 +195,38 @@ for (i in 1:lpwr) {
   tgS <- gsBoundSummary(x, ratio = 1, digits = 4, ddigits = 2,
                         tdigits = 1, timename = "Month")
 
-  N_total      <- as.integer(strsplit(tgS[2, 1], ":")[[1]][2])
-  Nev_IA_FA    <- c(as.integer(strsplit(tgS[3, 1], ":")[[1]][2]),
-                    as.integer(strsplit(tgS[8, 1], ":")[[1]][2]))
-  mat_IA_FA    <- round(Nev_IA_FA / N_total, 2)
-  fp_IA_FA     <- as.numeric(tgS[c(2, 7), 3])
-  cpwr_IA_FA   <- as.numeric(tgS[c(5, 10), 3])
-  cv_IA_FA     <- as.numeric(tgS[c(3, 8), 3])
-  calpha_spent <- 2 * fp_IA_FA
+  N_total <- as.integer(strsplit(tgS[2, 1], ":")[[1]][2])
+  Ns[i]   <- N_total
 
-  lr_pos  <- cpwr_IA_FA / calpha_spent
-  U1s[i,] <- (1 - cv_IA_FA) * lr_pos
-
-  Ns[i]    <- round(N_total)
-  Ne_IA[i] <- round(Ns[i] * mat_IA_FA[1])
-  Ne_FA[i] <- round(Ns[i] * mat_IA_FA[2])
-  cv_IA[i] <- cv_IA_FA[1]
-  cv_FA[i] <- cv_IA_FA[2]
+  for (j in seq_len(k)) {
+    row_n  <- 2 + (j - 1) * 5
+    row_cv <- 3 + (j - 1) * 5
+    row_pw <- 5 + (j - 1) * 5
+    fp_j   <- as.numeric(tgS[row_n,  3])
+    cv_j   <- as.numeric(tgS[row_cv, 3])
+    cpwr_j <- as.numeric(tgS[row_pw, 3])
+    U1s[i, j] <- (1 - cv_j) * (cpwr_j / (2 * fp_j))
+    if (j == k) Ne_FA[i] <- as.integer(strsplit(tgS[row_cv, 1], ":")[[1]][2])
+  }
 }
 
 # ── Optimal points ────────────────────────────────────────────────────────────
 
-wM_IA <- which.max(U1s[, 1])
-wM_FA <- which.max(U1s[, 2])
+for (j in seq_len(k)) {
+  wM <- which.max(U1s[, j])
+  if (j < k) {
+    cat(sprintf("\\n=== Optimal — Interim Analysis %d ===\\n", j))
+  } else {
+    cat("\\n=== Optimal — Final Analysis ===\\n")
+  }
+  cat(sprintf("  Power:    %.1f%%\\n", pwr_seq[wM] * 100))
+  cat(sprintf("  N total:  %d\\n",     Ns[wM]))
+  cat(sprintf("  Utility:  %.4f\\n",   U1s[wM, j]))
+}
 
-cat("\\n=== Optimal — Interim Analysis ===\\n")
-cat(sprintf("  Power:         %.1f%%\\n", pwr_seq[wM_IA] * 100))
-cat(sprintf("  N total:       %d\\n",     Ns[wM_IA]))
-cat(sprintf("  Events at IA:  %d\\n",     Ne_IA[wM_IA]))
-cat(sprintf("  Critical value (IA): %.4f\\n", cv_IA[wM_IA]))
-cat(sprintf("  Utility (IA):  %.4f\\n",   U1s[wM_IA, 1]))
-
-cat("\\n=== Optimal — Final Analysis ===\\n")
-cat(sprintf("  Power:         %.1f%%\\n", pwr_seq[wM_FA] * 100))
-cat(sprintf("  N total:       %d\\n",     Ns[wM_FA]))
-cat(sprintf("  Events at FA:  %d\\n",     Ne_FA[wM_FA]))
-cat(sprintf("  Critical value (FA): %.4f\\n", cv_FA[wM_FA]))
-cat(sprintf("  Utility (FA):  %.4f\\n",   U1s[wM_FA, 2]))
-
-# ── Expected values from GS-Intersect ────────────────────────────────────────
+# ── Expected values from GS-Intersect ─────────────────────────────────────────
 # Optimal IA → Power: ${response.optimal_IA.power}%, N: ${response.optimal_IA.N}, Events: ${response.optimal_IA.events_IA}, CV: ${response.optimal_IA.cv_IA.toFixed(4)}, Utility: ${response.optimal_IA.utility_IA.toFixed(4)}
 # Optimal FA → Power: ${response.optimal_FA.power}%, N: ${response.optimal_FA.N}, Events: ${response.optimal_FA.events_FA}, CV: ${response.optimal_FA.cv_FA.toFixed(4)}, Utility: ${response.optimal_FA.utility_FA.toFixed(4)}
-
-# ── Plot ──────────────────────────────────────────────────────────────────────
-
-dev.new(width = 12, height = 6)
-par(mfrow = c(1, 2))
-par(mar = c(5, 5, 6, 5))
-
-plot(Ne_IA, U1s[, 1], pch = 19, cex = 1.3,
-     xlab = "N. events at IA", ylab = "LR(+) * (1 - HR CV IA)", xaxt = "n", yaxt = "n")
-lines(Ne_IA, U1s[, 1])
-axis(3, at = Ne_IA, label = round(cv_IA, 2))
-mtext("IA CV", side = 3, line = 2.25)
-axis(1, at = Ne_IA)
-axis(2, at = U1s[, 1], label = round(U1s[, 1], 2), las = 2)
-axis(4, at = sort(U1s[, 1]), label = sort(round(pwr_seq * 100)), las = 2)
-mtext("power%", side = 4, line = 2.75)
-abline(v = Ne_IA[wM_IA], col = "red", lty = 3)
-
-plot(Ne_FA, U1s[, 2], pch = 19, cex = 1.3,
-     xlab = "N. events at FA", ylab = "LR(+) * (1 - HR CV FA)", xaxt = "n", yaxt = "n")
-lines(Ne_FA, U1s[, 2])
-axis(3, at = Ne_FA, label = round(cv_FA, 2))
-mtext("FA CV", side = 3, line = 2.25)
-axis(1, at = Ne_FA)
-axis(2, at = U1s[, 2], label = round(U1s[, 2], 2), las = 2)
-axis(4, at = sort(U1s[, 2]), label = sort(round(pwr_seq * 100)), las = 2)
-mtext("power%", side = 4, line = 2.75)
-abline(v = Ne_FA[wM_FA], col = "red", lty = 3)
 `;
 
   const blob = new Blob([script], { type: "text/plain" });
