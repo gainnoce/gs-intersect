@@ -54,11 +54,13 @@ const yHeadroom = (arr: number[]) => {
 const xPad = (events: number[]) => [Math.min(...events) * 0.95, Math.max(...events) * 1.02];
 
 // Greedy label-placement: returns a Plotly textposition for each point such that
-// labels avoid each other and nearby markers.
+// labels avoid each other, nearby markers, and the other curves.
+// curveSamples[i] is the array of {x,y} data points for the i-th series.
 function smartTextPositions(
   points: Array<{ x: number; y: number }>,
   xRange: number[],
   yRange: number[],
+  curveSamples?: Array<Array<{ x: number; y: number }>>,
 ): string[] {
   const xs = xRange[1] - xRange[0];
   const ys = yRange[1] - yRange[0];
@@ -104,6 +106,21 @@ function smartTextPositions(
         if (j === i) continue;
         const dx = Math.abs(lx - nx[j]), dy = Math.abs(ly - ny[j]);
         if (dx < LW && dy < LH * 0.8) score += 4;
+      }
+
+      // Penalise proximity to other curves (checks every sample point on curves ≠ i)
+      if (curveSamples) {
+        for (let ci = 0; ci < curveSamples.length; ci++) {
+          if (ci === i) continue; // skip own curve
+          for (const pt of curveSamples[ci]) {
+            const cpx = (pt.x - xRange[0]) / xs;
+            const cpy = (pt.y - yRange[0]) / ys;
+            const dx = Math.abs(lx - cpx), dy = Math.abs(ly - cpy);
+            if (dx < LW * 0.9 && dy < LH * 1.4) {
+              score += 3 * (1 - dx / (LW * 0.9)) * (1 - dy / (LH * 1.4));
+            }
+          }
+        }
       }
 
       // Small penalty for going out of chart bounds
@@ -351,7 +368,11 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     ...stagesData.map(st => ({ x: st.optEv, y: st.optUt })),
     { x: optimal_FA.events_FA, y: optimal_FA.utility_FA },
   ];
-  const overlayTextPos = smartTextPositions(overlayStarPts, xRange, yRangeAll);
+  const overlayCurveSamples = [
+    ...stagesData.map(st => st.events.map((e, idx) => ({ x: e, y: st.utils[idx] }))),
+    eventsFA.map((e, idx) => ({ x: e, y: utilFA[idx] })),
+  ];
+  const overlayTextPos = smartTextPositions(overlayStarPts, xRange, yRangeAll, overlayCurveSamples);
 
   const overlayData: PlotlyTrace[] = [
     ...stagesData.flatMap((st, j) => {
@@ -492,19 +513,6 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             <span className="text-[10px] text-az-platinum whitespace-nowrap ml-auto">
               Optimal: {iaSt.optPow}% power · CV {iaSt.optCv}
             </span>
-            {numIAs > 1 && (
-              <Button
-                variant="outline" size="sm"
-                onClick={() => setSharedX(sx => !sx)}
-                className={`text-[10px] h-6 px-2.5 gap-1 transition-colors ${
-                  sharedX
-                    ? "bg-az-navy/10 border-az-navy/40 text-az-navy"
-                    : "border-az-platinum text-az-graphite hover:border-az-mulberry hover:text-az-mulberry"
-                }`}
-              >
-                {sharedX ? "Own axis" : "Share x-axis"}
-              </Button>
-            )}
           </div>
 
           <Plot
@@ -522,11 +530,26 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             )}
           />
           <div className="flex items-center px-5 pb-4 pt-2">
-            {/* left spacer — mirrors ChartButtons width to keep nav centred */}
-            <div className="flex-1" />
-            {/* Stage navigation centred under Events axis label */}
+            {/* Left zone: Share x-axis (k>2 only) */}
+            <div className="flex-1 flex items-center">
+              {numIAs > 1 && (
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => setSharedX(sx => !sx)}
+                  className={`text-[10px] h-6 px-2.5 gap-1 transition-colors ${
+                    sharedX
+                      ? "bg-az-navy/10 border-az-navy/40 text-az-navy"
+                      : "border-az-platinum text-az-graphite hover:border-az-mulberry hover:text-az-mulberry"
+                  }`}
+                >
+                  {sharedX ? "Own axis" : "Share x-axis"}
+                </Button>
+              )}
+            </div>
+            {/* Stage navigation — ml-4 offsets for Plotly left/right margin asymmetry
+                so the nav centres under the "Events" x-axis label */}
             {numIAs > 1 && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 ml-4">
                 <button
                   onClick={() => setActiveIA(a => a - 1)}
                   disabled={activeIA === 0}
@@ -559,7 +582,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
                 </button>
               </div>
             )}
-            {/* Reset + PNG pushed to the right */}
+            {/* Right zone: Reset + PNG */}
             <div className="flex-1 flex justify-end gap-2">
               <ChartButtons div={iaDivs[activeIA]} name={`gs-intersect-IA${numIAs > 1 ? activeIA + 1 : ""}`} axes={AXES_SINGLE} />
             </div>
@@ -640,12 +663,16 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
 
         {/* Legend + controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 pb-4 pt-2">
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
+          <div className="flex flex-wrap gap-2">
             {overlayLegendItems.map(({ label, optLabel, color, optColor, visIdx, dash }) => (
               <button
                 key={visIdx}
                 onClick={() => setVis(v => v.map((val, idx) => idx === visIdx ? !val : val))}
-                className={`flex items-center gap-1.5 text-xs transition-opacity ${vis[visIdx] ? "opacity-100" : "opacity-35"}`}
+                className={`flex items-center gap-1.5 text-xs rounded-md border px-2.5 py-1.5 transition-all select-none ${
+                  vis[visIdx]
+                    ? "border-az-light-platinum bg-white shadow-sm hover:border-az-platinum hover:shadow"
+                    : "border-transparent opacity-35 bg-transparent"
+                }`}
               >
                 <svg width="22" height="10" viewBox="0 0 22 10">
                   <line x1="0" y1="5" x2="22" y2="5" stroke={color} strokeWidth="2.5" strokeDasharray={dash ? "4 3" : "none"} />
