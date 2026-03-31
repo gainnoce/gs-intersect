@@ -17,7 +17,7 @@ interface Props {
 }
 
 const IA_COLORS     = ["#6366f1", "#7c3aed", "#9333ea"] as const;
-const IA_OPT_COLORS = ["#f43f5e", "#fb7185", "#fda4af"] as const;
+const IA_OPT_COLORS = ["#f43f5e", "#fb7185", "#ec4899"] as const;
 const FA_COLOR      = "#10b981";
 const FA_OPT_COLOR  = "#f97316";
 
@@ -464,40 +464,26 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       {/* ── Side-by-side IA / FA ── */}
       <div className="grid grid-cols-2 gap-3">
 
-        {/* IA card — overlaid arrows for multi-stage navigation */}
-        <div className="rounded-xl border border-az-light-platinum bg-white shadow-sm overflow-hidden relative">
-
-          {/* Left arrow: previous IA stage */}
-          {numIAs > 1 && activeIA > 0 && (
-            <button
-              onClick={() => setActiveIA(a => a - 1)}
-              aria-label="Previous IA stage"
-              className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full shadow-md flex items-center justify-center hover:scale-110 transition-transform"
-              style={{ background: IA_COLORS[(activeIA - 1) % IA_COLORS.length] }}
-            >
-              <ChevronLeft className="w-4 h-4 text-white" />
-            </button>
-          )}
-          {/* Right arrow: next IA stage */}
-          {numIAs > 1 && activeIA < numIAs - 1 && (
-            <button
-              onClick={() => setActiveIA(a => a + 1)}
-              aria-label="Next IA stage"
-              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full shadow-md flex items-center justify-center hover:scale-110 transition-transform"
-              style={{ background: IA_COLORS[(activeIA + 1) % IA_COLORS.length] }}
-            >
-              <ChevronRight className="w-4 h-4 text-white" />
-            </button>
-          )}
+        {/* IA card */}
+        <div className="rounded-xl border border-az-light-platinum bg-white shadow-sm overflow-hidden">
 
           <div className="flex items-center gap-2 px-5 pt-4 pb-1">
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: iaColor }} />
             <h3 className="text-xs font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
               {numIAs === 1 ? "Interim Analysis" : `Interim Analysis — Stage ${activeIA + 1}`}
             </h3>
-            {/* Stage dot indicators */}
+            {/* Stage navigation: ← dots → inline in header */}
             {numIAs > 1 && (
-              <div className="flex gap-1 ml-0.5">
+              <div className="flex items-center gap-1 ml-0.5">
+                <button
+                  onClick={() => setActiveIA(a => a - 1)}
+                  disabled={activeIA === 0}
+                  aria-label="Previous IA stage"
+                  className="w-5 h-5 rounded-full flex items-center justify-center shadow-sm disabled:opacity-25 hover:scale-110 transition-transform"
+                  style={{ background: activeIA > 0 ? IA_COLORS[(activeIA - 1) % IA_COLORS.length] : "#9db0ac" }}
+                >
+                  <ChevronLeft className="w-3 h-3 text-white" />
+                </button>
                 {stagesData.map((_, j) => (
                   <button key={j} onClick={() => setActiveIA(j)} aria-label={`Go to IA ${j + 1}`}>
                     <span
@@ -510,6 +496,15 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
                     />
                   </button>
                 ))}
+                <button
+                  onClick={() => setActiveIA(a => a + 1)}
+                  disabled={activeIA === numIAs - 1}
+                  aria-label="Next IA stage"
+                  className="w-5 h-5 rounded-full flex items-center justify-center shadow-sm disabled:opacity-25 hover:scale-110 transition-transform"
+                  style={{ background: activeIA < numIAs - 1 ? IA_COLORS[(activeIA + 1) % IA_COLORS.length] : "#9db0ac" }}
+                >
+                  <ChevronRight className="w-3 h-3 text-white" />
+                </button>
               </div>
             )}
             <span className={`text-[10px] text-az-platinum whitespace-nowrap ${numIAs === 1 ? "ml-auto" : ""}`}>
