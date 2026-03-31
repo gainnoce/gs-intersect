@@ -321,7 +321,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   };
 
   // ── IA chart data ─────────────────────────────────────────────────────
-  const iaInit = makeInitTicks(iaSt.events, iaSt.cvs, iaSt.optEv, 2);
+  // Scale CV tick stride proportionally to how much sharedX expands the range.
+  // e.g. if range is 3× wider than IA1's natural span, stride becomes 6 so ticks
+  // stay spread out rather than bunching up on the left of the chart.
+  const iaNaturalWidth = xPad(iaSt.events)[1] - xPad(iaSt.events)[0];
+  const iaRangeWidth   = iaXRange[1] - iaXRange[0];
+  const iaTickStride   = Math.min(6, Math.max(1, Math.round(2 * iaRangeWidth / iaNaturalWidth)));
+  const iaInit = makeInitTicks(iaSt.events, iaSt.cvs, iaSt.optEv, iaTickStride);
 
   const iaData: Plotly.Data[] = [
     {
@@ -694,11 +700,16 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
 
         {/* Bottom bar: hint text (left) + Reset/PNG (right) */}
         <div className="flex items-center justify-between px-5 pb-4 gap-4">
-          <p className={`text-[10px] text-az-platinum ${logScale ? "italic" : ""}`}>
-            {logScale
-              ? "Log scale — early IAs with OBF spending can show high utility because LR(+) = power / alpha_spent is large when alpha spent is near zero."
-              : "Click legend items to show/hide curves · Switch to Log scale if one curve dominates"}
-          </p>
+          <div className="flex flex-col gap-0.5">
+            <p className="text-[10px] text-az-platinum">
+              Click legend items to show/hide curves · Switch to Log scale if one curve dominates
+            </p>
+            {logScale && (
+              <p className="text-[10px] text-az-platinum italic">
+                Log scale: early IAs with OBF spending can show high utility because LR(+) = power&nbsp;/&nbsp;alpha_spent is large when alpha spent is near zero.
+              </p>
+            )}
+          </div>
           <div className="shrink-0">
             <ChartButtons div={overlayDiv} name="gs-intersect-combined" axes={numK === 2 ? AXES_OVL_K2 : AXES_OVL_KN} />
           </div>
