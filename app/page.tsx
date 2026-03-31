@@ -45,7 +45,16 @@ export default function Home() {
       setResult(data);
       setLastInputs(inputs);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      const raw     = e instanceof Error ? e.message : "Unknown error";
+      const isNet   = /failed to fetch|network|load failed/i.test(raw);
+      const debugId = `ERR-${Date.now().toString(36).toUpperCase()}`;
+      // Debug code printed to console for support purposes
+      console.error(`[GS-Intersect ${debugId}]`, e);
+      setError(
+        isNet
+          ? `Network error — the API could not be reached. Please refresh the page and try again.\n\nIf the problem persists, contact support with code: ${debugId}`
+          : `${raw}\n\nIf this keeps happening, please refresh the page and try again. Debug code: ${debugId}`
+      );
     } finally {
       setLoading(false);
     }

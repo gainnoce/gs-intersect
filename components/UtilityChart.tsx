@@ -495,7 +495,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     <div className="space-y-4">
 
       {/* ── Side-by-side IA / FA ── */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 print:grid-cols-1">
 
         {/* IA card */}
         <div className="rounded-xl border border-az-light-platinum bg-white shadow-sm overflow-hidden">
