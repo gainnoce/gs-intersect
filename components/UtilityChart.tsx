@@ -101,14 +101,16 @@ function smartTextPositions(
         }
       }
 
-      // Penalise proximity to other star markers
+      // Penalise proximity to other star icons (large radius — stars are big)
       for (let j = 0; j < points.length; j++) {
         if (j === i) continue;
         const dx = Math.abs(lx - nx[j]), dy = Math.abs(ly - ny[j]);
-        if (dx < LW && dy < LH * 0.8) score += 4;
+        if (dx < LW * 1.1 && dy < LH * 1.2) score += 12;
+        else if (dx < LW * 1.6 && dy < LH * 1.6) score += 4;
       }
 
-      // Penalise proximity to other curves (checks every sample point on curves ≠ i)
+      // Penalise proximity to other curves.
+      // Hard penalty when a curve point falls inside the label box; soft gradient outside.
       if (curveSamples) {
         for (let ci = 0; ci < curveSamples.length; ci++) {
           if (ci === i) continue; // skip own curve
@@ -116,8 +118,12 @@ function smartTextPositions(
             const cpx = (pt.x - xRange[0]) / xs;
             const cpy = (pt.y - yRange[0]) / ys;
             const dx = Math.abs(lx - cpx), dy = Math.abs(ly - cpy);
-            if (dx < LW * 0.9 && dy < LH * 1.4) {
-              score += 3 * (1 - dx / (LW * 0.9)) * (1 - dy / (LH * 1.4));
+            // Hard: curve point is inside the label bounding box
+            if (dx < LW * 0.65 && dy < LH * 0.9) {
+              score += 20;
+            } else if (dx < LW * 1.3 && dy < LH * 1.8) {
+              // Soft: curve point near (but outside) label box
+              score += 8 * (1 - dx / (LW * 1.3)) * (1 - dy / (LH * 1.8));
             }
           }
         }
@@ -661,44 +667,42 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             : () => undefined}
         />
 
-        {/* Legend + controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 pb-4 pt-2">
-          <div className="flex flex-wrap gap-2">
-            {overlayLegendItems.map(({ label, optLabel, color, optColor, visIdx, dash }) => (
-              <button
-                key={visIdx}
-                onClick={() => setVis(v => v.map((val, idx) => idx === visIdx ? !val : val))}
-                className={`flex items-center gap-1.5 text-xs rounded-md border px-2.5 py-1.5 transition-all select-none ${
-                  vis[visIdx]
-                    ? "border-az-light-platinum bg-white shadow-sm hover:border-az-platinum hover:shadow"
-                    : "border-transparent opacity-35 bg-transparent"
-                }`}
-              >
-                <svg width="22" height="10" viewBox="0 0 22 10">
-                  <line x1="0" y1="5" x2="22" y2="5" stroke={color} strokeWidth="2.5" strokeDasharray={dash ? "4 3" : "none"} />
-                  <circle cx="11" cy="5" r="3.5" fill={color} />
-                </svg>
-                <span className="text-az-graphite font-medium">{label}</span>
-                <svg width="10" height="10" viewBox="0 0 14 14" className="ml-0.5">
-                  <polygon points="7,1 8.5,5.5 13,5.5 9.5,8.5 10.8,13 7,10.2 3.2,13 4.5,8.5 1,5.5 5.5,5.5" fill={optColor} />
-                </svg>
-                <span className="text-az-graphite">{optLabel}</span>
-              </button>
-            ))}
-          </div>
-          <ChartButtons div={overlayDiv} name="gs-intersect-combined" axes={numK === 2 ? AXES_OVL_K2 : AXES_OVL_KN} />
+        {/* Legend — full-width wrapping row */}
+        <div className="flex flex-wrap gap-2 px-5 pt-2 pb-3">
+          {overlayLegendItems.map(({ label, optLabel, color, optColor, visIdx, dash }) => (
+            <button
+              key={visIdx}
+              onClick={() => setVis(v => v.map((val, idx) => idx === visIdx ? !val : val))}
+              className={`flex items-center gap-1.5 text-xs rounded-md border px-2.5 py-1.5 transition-all select-none ${
+                vis[visIdx]
+                  ? "border-az-light-platinum bg-white shadow-sm hover:border-az-platinum hover:shadow"
+                  : "border-transparent opacity-35 bg-transparent"
+              }`}
+            >
+              <svg width="22" height="10" viewBox="0 0 22 10">
+                <line x1="0" y1="5" x2="22" y2="5" stroke={color} strokeWidth="2.5" strokeDasharray={dash ? "4 3" : "none"} />
+                <circle cx="11" cy="5" r="3.5" fill={color} />
+              </svg>
+              <span className="text-az-graphite font-medium">{label}</span>
+              <svg width="10" height="10" viewBox="0 0 14 14" className="ml-0.5">
+                <polygon points="7,1 8.5,5.5 13,5.5 9.5,8.5 10.8,13 7,10.2 3.2,13 4.5,8.5 1,5.5 5.5,5.5" fill={optColor} />
+              </svg>
+              <span className="text-az-graphite">{optLabel}</span>
+            </button>
+          ))}
         </div>
 
-        {logScale && (
-          <p className="text-[10px] text-az-platinum px-5 pb-3 italic">
-            Log scale — curves with very different absolute utilities are easier to compare. Early IAs with OBF spending can show high utility because LR(+) = power / alpha_spent is large when alpha spent is near zero.
+        {/* Bottom bar: hint text (left) + Reset/PNG (right) */}
+        <div className="flex items-center justify-between px-5 pb-4 gap-4">
+          <p className={`text-[10px] text-az-platinum ${logScale ? "italic" : ""}`}>
+            {logScale
+              ? "Log scale — early IAs with OBF spending can show high utility because LR(+) = power / alpha_spent is large when alpha spent is near zero."
+              : "Click legend items to show/hide curves · Switch to Log scale if one curve dominates"}
           </p>
-        )}
-        {!logScale && (
-          <p className="text-[11px] text-az-platinum px-5 pb-3">
-            Click legend items to show/hide curves · Switch to Log scale if one curve dominates
-          </p>
-        )}
+          <div className="shrink-0">
+            <ChartButtons div={overlayDiv} name="gs-intersect-combined" axes={numK === 2 ? AXES_OVL_K2 : AXES_OVL_KN} />
+          </div>
+        </div>
       </div>
     </div>
   );
