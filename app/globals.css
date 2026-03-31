@@ -97,4 +97,15 @@
   .print-full-width {
     grid-column: 1 / -1 !important;
   }
+  /* Multi-stage PDF: reveal all IA stage charts stacked */
+  .ia-chart-wrapper {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .ia-chart-slide {
+    position: static !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    height: 340px !important;
+  }
 }

@@ -178,21 +178,17 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   const powerLbls = results.map(r => `${r.power}%`);
   const sortedFA  = [...results].sort((a, b) => a.utility_FA - b.utility_FA);
 
-  const iaSt     = stagesData[activeIA];
-  const iaColor  = IA_COLORS[activeIA % IA_COLORS.length];
-  const iaOptCol = IA_OPT_COLORS[activeIA % IA_OPT_COLORS.length];
+  const iaSt    = stagesData[activeIA];
+  const iaColor = IA_COLORS[activeIA % IA_COLORS.length];
 
-  // Each individual chart gets its own snug x-range to avoid cramping.
-  // The combined overlay uses the global range spanning all analyses.
+  // Global x-range spans all analyses (used by combined overlay and sharedX mode).
   const allEvents = [...stagesData.flatMap(s => s.events), ...eventsFA];
   const xMin      = Math.min(...allEvents) * 0.95;
   const xMax      = Math.max(...allEvents) * 1.02;
   const xRange    = [xMin, xMax];
-  const iaXRange  = sharedX ? xRange : xPad(iaSt.events);
   const faXRange  = xPad(eventsFA);
 
   // y ranges
-  const iaYRange  = yHeadroom(iaSt.utils);
   const faYRange  = yHeadroom(utilFA);
   const yRangeAll = yHeadroom([...stagesData.flatMap(s => s.utils), ...utilFA]);
 
@@ -320,37 +316,41 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     };
   };
 
-  // ── IA chart data ─────────────────────────────────────────────────────
-  // Scale CV tick stride proportionally to how much sharedX expands the range.
-  // e.g. if range is 3× wider than IA1's natural span, stride becomes 6 so ticks
-  // stay spread out rather than bunching up on the left of the chart.
-  const iaNaturalWidth = xPad(iaSt.events)[1] - xPad(iaSt.events)[0];
-  const iaRangeWidth   = iaXRange[1] - iaXRange[0];
-  const iaTickStride   = Math.min(6, Math.max(1, Math.round(2 * iaRangeWidth / iaNaturalWidth)));
-  const iaInit = makeInitTicks(iaSt.events, iaSt.cvs, iaSt.optEv, iaTickStride);
-
-  const iaData: Plotly.Data[] = [
-    {
-      x: iaSt.events, y: iaSt.utils, type: "scatter", mode: "lines+markers",
-      line: { color: iaColor, width: 2.5 }, marker: { color: iaColor, size: 6 },
-      text: powerLbls, customdata: results.map(r => r.ia_stages?.[activeIA]?.cv ?? r.cv_IA),
-      hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
-      showlegend: false, xaxis: "x", yaxis: "y",
-    },
-    optStar(iaSt.optEv, iaSt.optUt, iaSt.optCv, iaSt.optPow, iaOptCol, `Optimal IA${numIAs > 1 ? ` ${activeIA + 1}` : ""}`, iaXRange),
-    {
-      x: iaInit.vals, y: iaInit.vals.map(() => null as unknown as number),
-      type: "scatter", mode: "markers",
-      marker: { opacity: 0, size: 1 }, showlegend: false,
-      xaxis: "x2", yaxis: "y", hoverinfo: "skip" as const,
-    },
-  ];
-
-  const iaLayout = singleLayout(
-    iaInit.vals, iaInit.labels, iaSt.sorted,
-    "utility_IA", iaColor, iaYRange, iaXRange,
-    (r) => r.ia_stages?.[activeIA]?.utility ?? r.utility_IA,
-  );
+  // ── IA chart data — computed for ALL stages (enables multi-stage PDF) ─────
+  // Non-active charts are kept in the DOM at opacity-0 so Plotly pre-renders them.
+  // Print CSS reveals them all stacked.
+  const allIACharts = stagesData.map((st, j) => {
+    const color   = IA_COLORS[j % IA_COLORS.length];
+    const optCol  = IA_OPT_COLORS[j % IA_OPT_COLORS.length];
+    const jXRange = sharedX ? xRange : xPad(st.events);
+    const jYRange = yHeadroom(st.utils);
+    const naturalW = xPad(st.events)[1] - xPad(st.events)[0];
+    const rangeW   = jXRange[1] - jXRange[0];
+    const stride   = Math.min(6, Math.max(1, Math.round(2 * rangeW / naturalW)));
+    const init     = makeInitTicks(st.events, st.cvs, st.optEv, stride);
+    const data: Plotly.Data[] = [
+      {
+        x: st.events, y: st.utils, type: "scatter", mode: "lines+markers",
+        line: { color, width: 2.5 }, marker: { color, size: 6 },
+        text: powerLbls, customdata: results.map(r => r.ia_stages?.[j]?.cv ?? r.cv_IA),
+        hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
+        showlegend: false, xaxis: "x", yaxis: "y",
+      },
+      optStar(st.optEv, st.optUt, st.optCv, st.optPow, optCol, `Optimal IA${numIAs > 1 ? ` ${j + 1}` : ""}`, jXRange),
+      {
+        x: init.vals, y: init.vals.map(() => null as unknown as number),
+        type: "scatter", mode: "markers",
+        marker: { opacity: 0, size: 1 }, showlegend: false,
+        xaxis: "x2", yaxis: "y", hoverinfo: "skip" as const,
+      },
+    ];
+    const layout = singleLayout(
+      init.vals, init.labels, st.sorted,
+      "utility_IA", color, jYRange, jXRange,
+      (r) => r.ia_stages?.[j]?.utility ?? r.utility_IA,
+    );
+    return { data, layout, jXRange, init, color };
+  });
 
   // ── FA chart data ─────────────────────────────────────────────────────
   const faInit = makeInitTicks(eventsFA, cvFA, optimal_FA.events_FA, 2);
@@ -527,20 +527,40 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             </span>
           </div>
 
-          <Plot
-            key={`ia-${activeIA}`}
-            data={iaData}
-            layout={iaLayout}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: "100%", height: "340px" }}
-            onInitialized={(_, div) => setIaDivs(prev => prev[activeIA] === div ? prev : prev.map((d, i) => i === activeIA ? div : d))}
-            onUpdate={(_, div)       => setIaDivs(prev => prev[activeIA] === div ? prev : prev.map((d, i) => i === activeIA ? div : d))}
-            onRelayout={makeCvRelayout(
-              iaDivs[activeIA],
-              [{ key: "xaxis2", events: iaSt.events, labels: iaSt.cvs, optEvent: iaSt.optEv }],
-              iaXRange[0], iaXRange[1],
-            )}
-          />
+          {/* All IA stage charts — active one visible, others opacity-0 absolute.
+              Print CSS (.ia-chart-wrapper / .ia-chart-slide) stacks all. */}
+          <div className="ia-chart-wrapper relative" style={{ height: "340px" }}>
+            {allIACharts.map(({ data, layout, jXRange, init }, j) => {
+              const isActive = j === activeIA;
+              return (
+                <div
+                  key={j}
+                  className={`ia-chart-slide ${isActive ? "relative h-full" : "absolute inset-0 opacity-0 pointer-events-none"}`}
+                >
+                  {/* Print-only stage label shown above each non-active chart */}
+                  {numIAs > 1 && (
+                    <div className={`${isActive ? "hidden" : "hidden"} print:flex items-center gap-2 px-5 pt-3 pb-0`}>
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: IA_COLORS[j % IA_COLORS.length] }} />
+                      <span className="text-xs font-semibold text-az-navy">Interim Analysis — Stage {j + 1}</span>
+                    </div>
+                  )}
+                  <Plot
+                    data={data}
+                    layout={layout}
+                    config={{ displayModeBar: false, responsive: true }}
+                    style={{ width: "100%", height: "340px" }}
+                    onInitialized={(_, div) => setIaDivs(prev => prev[j] === div ? prev : prev.map((d, i) => i === j ? div : d))}
+                    onUpdate={(_, div)       => setIaDivs(prev => prev[j] === div ? prev : prev.map((d, i) => i === j ? div : d))}
+                    onRelayout={makeCvRelayout(
+                      iaDivs[j],
+                      [{ key: "xaxis2", events: stagesData[j].events, labels: stagesData[j].cvs, optEvent: stagesData[j].optEv }],
+                      jXRange[0], jXRange[1],
+                    )}
+                  />
+                </div>
+              );
+            })}
+          </div>
           <div className="flex items-center px-5 pb-4 pt-2">
             {/* Left zone: Share x-axis (k>2 only) */}
             <div className="flex-1 flex items-center">
@@ -673,8 +693,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             : () => undefined}
         />
 
-        {/* Legend — full-width wrapping row */}
-        <div className="flex flex-wrap gap-2 px-5 pt-2 pb-3">
+        {/* Legend — full-width wrapping row, centred */}
+        <div className="flex flex-wrap justify-center gap-2 px-5 pt-2 pb-3">
           {overlayLegendItems.map(({ label, optLabel, color, optColor, visIdx, dash }) => (
             <button
               key={visIdx}
