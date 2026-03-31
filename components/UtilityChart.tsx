@@ -53,6 +53,71 @@ const yHeadroom = (arr: number[]) => {
 // Snug x-range for a single chart's event array (no shared-range cramping)
 const xPad = (events: number[]) => [Math.min(...events) * 0.95, Math.max(...events) * 1.02];
 
+// Greedy label-placement: returns a Plotly textposition for each point such that
+// labels avoid each other and nearby markers.
+function smartTextPositions(
+  points: Array<{ x: number; y: number }>,
+  xRange: number[],
+  yRange: number[],
+): string[] {
+  const xs = xRange[1] - xRange[0];
+  const ys = yRange[1] - yRange[0];
+  if (xs === 0 || ys === 0) return points.map(() => "top right");
+
+  const nx = points.map(p => (p.x - xRange[0]) / xs);
+  const ny = points.map(p => (p.y - yRange[0]) / ys);
+
+  // Approximate label half-size in normalised units
+  const LW = 0.14, LH = 0.09;
+  // Centroid of label box relative to anchor
+  const OFFSET: Record<string, [number, number]> = {
+    "top right":    [ LW * 0.55,  LH],
+    "top left":     [-LW * 0.55,  LH],
+    "bottom right": [ LW * 0.55, -LH],
+    "bottom left":  [-LW * 0.55, -LH],
+  };
+  const CANDS = Object.keys(OFFSET) as Array<keyof typeof OFFSET>;
+
+  const chosen: string[] = [];
+
+  for (let i = 0; i < points.length; i++) {
+    let best = nx[i] >= 0.5 ? "top left" : "top right";
+    let bestScore = Infinity;
+
+    for (const cand of CANDS) {
+      const [ox, oy] = OFFSET[cand];
+      const lx = nx[i] + ox, ly = ny[i] + oy;
+      let score = 0;
+
+      // Penalise overlap with already-placed labels
+      for (let j = 0; j < i; j++) {
+        const [pox, poy] = OFFSET[chosen[j]];
+        const plx = nx[j] + pox, ply = ny[j] + poy;
+        const dx = Math.abs(lx - plx), dy = Math.abs(ly - ply);
+        if (dx < LW * 1.2 && dy < LH * 1.2) {
+          score += 10 * (1 - dx / (LW * 1.2)) * (1 - dy / (LH * 1.2));
+        }
+      }
+
+      // Penalise proximity to other star markers
+      for (let j = 0; j < points.length; j++) {
+        if (j === i) continue;
+        const dx = Math.abs(lx - nx[j]), dy = Math.abs(ly - ny[j]);
+        if (dx < LW && dy < LH * 0.8) score += 4;
+      }
+
+      // Small penalty for going out of chart bounds
+      if (lx < 0.02 || lx > 0.98 || ly < 0 || ly > 1.1) score += 3;
+
+      if (score < bestScore) { bestScore = score; best = cand; }
+    }
+
+    chosen.push(best);
+  }
+
+  return chosen;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyTrace = any;
 
@@ -215,10 +280,10 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const optStar = (x: number, y: number, cv: string, power: number, color: string, label: string, chartXRange?: number[]): any => {
-    // Place text on the side with more room so it stays inside the chart area
+  const optStar = (x: number, y: number, cv: string, power: number, color: string, label: string, chartXRange?: number[], forcedPos?: string): any => {
+    // Use forced position (from collision algorithm) or fall back to x-midpoint heuristic
     const xMid = chartXRange ? (chartXRange[0] + chartXRange[1]) / 2 : x;
-    const textposition = x >= xMid ? "top left" : "top right";
+    const textposition = forcedPos ?? (x >= xMid ? "top left" : "top right");
     return {
       x: [x], y: [y],
       type: "scatter", mode: "text+markers",
@@ -281,6 +346,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   const faLayout = singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", FA_COLOR, faYRange, faXRange);
 
   // ── Overlay data ──────────────────────────────────────────────────────
+  // Pre-compute non-overlapping label positions for all overlay stars
+  const overlayStarPts = [
+    ...stagesData.map(st => ({ x: st.optEv, y: st.optUt })),
+    { x: optimal_FA.events_FA, y: optimal_FA.utility_FA },
+  ];
+  const overlayTextPos = smartTextPositions(overlayStarPts, xRange, yRangeAll);
+
   const overlayData: PlotlyTrace[] = [
     ...stagesData.flatMap((st, j) => {
       const col    = IA_COLORS[j % IA_COLORS.length];
@@ -295,7 +367,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
           hovertemplate: `<b>${label} Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>`,
           showlegend: false, xaxis: "x", yaxis: "y",
         },
-        { ...optStar(st.optEv, st.optUt, st.optCv, st.optPow, optCol, `Optimal ${label}`, xRange), visible: vis[j] ? true : "legendonly" },
+        { ...optStar(st.optEv, st.optUt, st.optCv, st.optPow, optCol, `Optimal ${label}`, xRange, overlayTextPos[j]), visible: vis[j] ? true : "legendonly" },
       ];
     }),
     {
@@ -306,7 +378,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       hovertemplate: "<b>FA Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
       showlegend: false, xaxis: "x", yaxis: "y",
     },
-    { ...optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, FA_OPT_COLOR, "Optimal FA", xRange), visible: vis[numIAs] ? true : "legendonly" },
+    { ...optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, FA_OPT_COLOR, "Optimal FA", xRange, overlayTextPos[numIAs]), visible: vis[numIAs] ? true : "legendonly" },
     // CV axis anchor traces — only for k=2
     ...(numK === 2 ? (() => {
       const ovlIAInit = makeInitTicks(stagesData[0].events, stagesData[0].cvs, stagesData[0].optEv, 3);
@@ -400,9 +472,10 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             <button
               onClick={() => setActiveIA(a => a - 1)}
               aria-label="Previous IA stage"
-              className="absolute left-0 inset-y-0 w-7 z-10 flex items-center justify-center bg-gradient-to-r from-white/95 to-transparent hover:from-az-light-platinum/80 transition-colors"
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full shadow-md flex items-center justify-center hover:scale-110 transition-transform"
+              style={{ background: IA_COLORS[(activeIA - 1) % IA_COLORS.length] }}
             >
-              <ChevronLeft className="w-3.5 h-3.5 text-az-graphite" />
+              <ChevronLeft className="w-4 h-4 text-white" />
             </button>
           )}
           {/* Right arrow: next IA stage */}
@@ -410,9 +483,10 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             <button
               onClick={() => setActiveIA(a => a + 1)}
               aria-label="Next IA stage"
-              className="absolute right-0 inset-y-0 w-7 z-10 flex items-center justify-center bg-gradient-to-l from-white/95 to-transparent hover:from-az-light-platinum/80 transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full shadow-md flex items-center justify-center hover:scale-110 transition-transform"
+              style={{ background: IA_COLORS[(activeIA + 1) % IA_COLORS.length] }}
             >
-              <ChevronRight className="w-3.5 h-3.5 text-az-graphite" />
+              <ChevronRight className="w-4 h-4 text-white" />
             </button>
           )}
 
