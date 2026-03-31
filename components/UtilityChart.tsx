@@ -472,18 +472,9 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             <h3 className="text-xs font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
               {numIAs === 1 ? "Interim Analysis" : `Interim Analysis — Stage ${activeIA + 1}`}
             </h3>
-            {/* Stage navigation: ← dots → inline in header */}
+            {/* Passive stage dots in header */}
             {numIAs > 1 && (
-              <div className="flex items-center gap-1 ml-0.5">
-                <button
-                  onClick={() => setActiveIA(a => a - 1)}
-                  disabled={activeIA === 0}
-                  aria-label="Previous IA stage"
-                  className="w-5 h-5 rounded-full flex items-center justify-center shadow-sm disabled:opacity-25 hover:scale-110 transition-transform"
-                  style={{ background: activeIA > 0 ? IA_COLORS[(activeIA - 1) % IA_COLORS.length] : "#9db0ac" }}
-                >
-                  <ChevronLeft className="w-3 h-3 text-white" />
-                </button>
+              <div className="flex gap-1 ml-0.5">
                 {stagesData.map((_, j) => (
                   <button key={j} onClick={() => setActiveIA(j)} aria-label={`Go to IA ${j + 1}`}>
                     <span
@@ -496,25 +487,16 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
                     />
                   </button>
                 ))}
-                <button
-                  onClick={() => setActiveIA(a => a + 1)}
-                  disabled={activeIA === numIAs - 1}
-                  aria-label="Next IA stage"
-                  className="w-5 h-5 rounded-full flex items-center justify-center shadow-sm disabled:opacity-25 hover:scale-110 transition-transform"
-                  style={{ background: activeIA < numIAs - 1 ? IA_COLORS[(activeIA + 1) % IA_COLORS.length] : "#9db0ac" }}
-                >
-                  <ChevronRight className="w-3 h-3 text-white" />
-                </button>
               </div>
             )}
-            <span className={`text-[10px] text-az-platinum whitespace-nowrap ${numIAs === 1 ? "ml-auto" : ""}`}>
+            <span className="text-[10px] text-az-platinum whitespace-nowrap ml-auto">
               Optimal: {iaSt.optPow}% power · CV {iaSt.optCv}
             </span>
             {numIAs > 1 && (
               <Button
                 variant="outline" size="sm"
                 onClick={() => setSharedX(sx => !sx)}
-                className={`ml-auto text-[10px] h-6 px-2.5 gap-1 transition-colors ${
+                className={`text-[10px] h-6 px-2.5 gap-1 transition-colors ${
                   sharedX
                     ? "bg-az-navy/10 border-az-navy/40 text-az-navy"
                     : "border-az-platinum text-az-graphite hover:border-az-mulberry hover:text-az-mulberry"
@@ -539,8 +521,48 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
               iaXRange[0], iaXRange[1],
             )}
           />
-          <div className="flex justify-end gap-2 px-5 pb-4 pt-2">
-            <ChartButtons div={iaDivs[activeIA]} name={`gs-intersect-IA${numIAs > 1 ? activeIA + 1 : ""}`} axes={AXES_SINGLE} />
+          <div className="flex items-center px-5 pb-4 pt-2">
+            {/* left spacer — mirrors ChartButtons width to keep nav centred */}
+            <div className="flex-1" />
+            {/* Stage navigation centred under Events axis label */}
+            {numIAs > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setActiveIA(a => a - 1)}
+                  disabled={activeIA === 0}
+                  aria-label="Previous IA stage"
+                  className="w-6 h-6 rounded-full flex items-center justify-center shadow-sm disabled:opacity-25 hover:scale-110 transition-transform"
+                  style={{ background: activeIA > 0 ? IA_COLORS[(activeIA - 1) % IA_COLORS.length] : "#9db0ac" }}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 text-white" />
+                </button>
+                {stagesData.map((_, j) => (
+                  <button key={j} onClick={() => setActiveIA(j)} aria-label={`Go to IA ${j + 1}`}>
+                    <span
+                      className="block rounded-full transition-all"
+                      style={{
+                        width: j === activeIA ? "16px" : "7px",
+                        height: "7px",
+                        background: j === activeIA ? IA_COLORS[j % IA_COLORS.length] : "#9db0ac",
+                      }}
+                    />
+                  </button>
+                ))}
+                <button
+                  onClick={() => setActiveIA(a => a + 1)}
+                  disabled={activeIA === numIAs - 1}
+                  aria-label="Next IA stage"
+                  className="w-6 h-6 rounded-full flex items-center justify-center shadow-sm disabled:opacity-25 hover:scale-110 transition-transform"
+                  style={{ background: activeIA < numIAs - 1 ? IA_COLORS[(activeIA + 1) % IA_COLORS.length] : "#9db0ac" }}
+                >
+                  <ChevronRight className="w-3.5 h-3.5 text-white" />
+                </button>
+              </div>
+            )}
+            {/* Reset + PNG pushed to the right */}
+            <div className="flex-1 flex justify-end gap-2">
+              <ChartButtons div={iaDivs[activeIA]} name={`gs-intersect-IA${numIAs > 1 ? activeIA + 1 : ""}`} axes={AXES_SINGLE} />
+            </div>
           </div>
         </div>
 
