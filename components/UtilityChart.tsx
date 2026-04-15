@@ -165,11 +165,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     const optEv  = opt.ia_stages?.[j]?.events  ?? opt.events_IA;
     const optUt  = opt.ia_stages?.[j]?.utility ?? opt.utility_IA;
     const optCv  = (opt.ia_stages?.[j]?.cv ?? opt.cv_IA).toFixed(3);
-    const optPow = opt.power;
+    const optPow   = opt.power;
+    // IA-specific cumulative power (may differ from optPow which is the FA target)
+    const optIAPow = opt.ia_stages?.[j]?.power ?? opt.power_IA ?? opt.power;
     const sorted = [...results].sort((a, b) =>
       (a.ia_stages?.[j]?.utility ?? a.utility_IA) - (b.ia_stages?.[j]?.utility ?? b.utility_IA)
     );
-    return { events, utils, cvs, opt, optEv, optUt, optCv, optPow, sorted };
+    return { events, utils, cvs, opt, optEv, optUt, optCv, optPow, optIAPow, sorted };
   });
 
   const eventsFA  = results.map(r => r.events_FA);
@@ -258,8 +260,11 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     yRange: number[],
     chartXRange: number[],
     utilExtractor?: (r: DesignResult) => number,
+    powerLabel?: string,
+    powerExtractor?: (r: DesignResult) => number,
   ): Partial<Plotly.Layout> => {
-    const getUtil = utilExtractor ?? ((r: DesignResult) => r[utilKey]);
+    const getUtil  = utilExtractor  ?? ((r: DesignResult) => r[utilKey]);
+    const getPower = powerExtractor ?? ((r: DesignResult) => r.power);
     return {
       paper_bgcolor: "transparent",
       plot_bgcolor:  "#f8faf9",
@@ -289,14 +294,25 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       yaxis2: {
         overlaying: "y", side: "right",
         tickvals: sortedRows.map(r => getUtil(r)),
-        ticktext: sortedRows.map(r => `${r.power}%`),
+        ticktext: sortedRows.map(r => `${getPower(r).toFixed(1)}%`),
         tickfont: { color: accentColor, size: 9 },
-        title: { text: "Power %", font: { color: accentColor, size: 10 } },
+        title: { text: powerLabel ?? "Power %", font: { color: accentColor, size: 10 } },
         showgrid: false, zeroline: false,
         showline: true, linecolor: accentColor, ticks: "outside",
       } as Partial<Plotly.LayoutAxis>,
     };
   };
+
+  // Vertical reference line — solid for the chart's own optimal, dashed for the cross-optimal.
+  // Drawn before the curve so it sits behind all data.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vline = (x: number, yRange: number[], color: string, dash: "solid" | "dash", hoverLabel: string): any => ({
+    x: [x, x], y: [yRange[0], yRange[1]],
+    type: "scatter", mode: "lines",
+    line: { color, width: dash === "solid" ? 2 : 1.5, dash },
+    hovertemplate: `${hoverLabel}<br>Events: ${x}<extra></extra>`,
+    showlegend: false, xaxis: "x", yaxis: "y",
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const optStar = (x: number, y: number, cv: string, power: number, color: string, label: string, chartXRange?: number[], forcedPos?: string): any => {
@@ -328,7 +344,14 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     const rangeW   = jXRange[1] - jXRange[0];
     const stride   = Math.min(6, Math.max(1, Math.round(2 * rangeW / naturalW)));
     const init     = makeInitTicks(st.events, st.cvs, st.optEv, stride);
+    // Events at this IA stage under the FA-optimal design (cross-reference)
+    const faOptEvAtIA = optimal_FA.ia_stages?.[j]?.events ?? optimal_FA.events_IA;
     const data: Plotly.Data[] = [
+      // Reference lines behind the curve (solid = IA-optimal, dashed = FA-optimal)
+      vline(st.optEv, jYRange, color, "solid", "Optimal for IA"),
+      ...(faOptEvAtIA !== st.optEv
+        ? [vline(faOptEvAtIA, jYRange, color, "dash", "Optimal for FA (reference)")]
+        : []),
       {
         x: st.events, y: st.utils, type: "scatter", mode: "lines+markers",
         line: { color, width: 2.5 }, marker: { color, size: 6 },
@@ -336,7 +359,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
         hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
         showlegend: false, xaxis: "x", yaxis: "y",
       },
-      optStar(st.optEv, st.optUt, st.optCv, st.optPow, optCol, `Optimal IA${numIAs > 1 ? ` ${j + 1}` : ""}`, jXRange),
+      optStar(st.optEv, st.optUt, st.optCv, st.optIAPow, optCol, `Optimal IA${numIAs > 1 ? ` ${j + 1}` : ""}`, jXRange),
       {
         x: init.vals, y: init.vals.map(() => null as unknown as number),
         type: "scatter", mode: "markers",
@@ -348,6 +371,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       init.vals, init.labels, st.sorted,
       "utility_IA", color, jYRange, jXRange,
       (r) => r.ia_stages?.[j]?.utility ?? r.utility_IA,
+      "IA Power %",
+      (r) => r.ia_stages?.[j]?.power ?? r.power_IA ?? r.power,
     );
     return { data, layout, jXRange, init, color };
   });
@@ -355,7 +380,14 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   // ── FA chart data ─────────────────────────────────────────────────────
   const faInit = makeInitTicks(eventsFA, cvFA, optimal_FA.events_FA, 2);
 
+  // Events at FA under the IA-optimal design (cross-reference)
+  const iaOptEvAtFA = optimal_IA.events_FA;
   const faData: Plotly.Data[] = [
+    // Reference lines behind the curve (solid = FA-optimal, dashed = IA-optimal)
+    vline(optimal_FA.events_FA, faYRange, FA_COLOR, "solid", "Optimal for FA"),
+    ...(iaOptEvAtFA !== optimal_FA.events_FA
+      ? [vline(iaOptEvAtFA, faYRange, FA_COLOR, "dash", "Optimal for IA (reference)")]
+      : []),
     {
       x: eventsFA, y: utilFA, type: "scatter", mode: "lines+markers",
       line: { color: FA_COLOR, width: 2.5, dash: "dot" }, marker: { color: FA_COLOR, size: 6 },
@@ -372,7 +404,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     },
   ];
 
-  const faLayout = singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", FA_COLOR, faYRange, faXRange);
+  const faLayout = singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", FA_COLOR, faYRange, faXRange, undefined, "FA Cumul. Power %");
 
   // ── Overlay data ──────────────────────────────────────────────────────
   // Pre-compute non-overlapping label positions for all overlay stars
@@ -400,7 +432,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
           hovertemplate: `<b>${label} Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>`,
           showlegend: false, xaxis: "x", yaxis: "y",
         },
-        { ...optStar(st.optEv, st.optUt, st.optCv, st.optPow, optCol, `Optimal ${label}`, xRange, overlayTextPos[j]), visible: vis[j] ? true : "legendonly" },
+        { ...optStar(st.optEv, st.optUt, st.optCv, st.optIAPow, optCol, `Optimal ${label}`, xRange, overlayTextPos[j]), visible: vis[j] ? true : "legendonly" },
       ];
     }),
     {
@@ -483,7 +515,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   const overlayLegendItems = [
     ...stagesData.map((st, j) => ({
       label:    numIAs === 1 ? "Interim Analysis"        : `IA Stage ${j + 1}`,
-      optLabel: numIAs === 1 ? `Optimal IA (${st.optPow}%)` : `Opt IA${j + 1} (${st.optPow}%)`,
+      optLabel: numIAs === 1 ? `Optimal IA (${st.optIAPow}%)` : `Opt IA${j + 1} (${st.optIAPow}%)`,
       color: IA_COLORS[j % IA_COLORS.length],
       optColor: IA_OPT_COLORS[j % IA_OPT_COLORS.length],
       visIdx: j, dash: false,
@@ -523,7 +555,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
               </div>
             )}
             <span className="text-[10px] text-az-platinum whitespace-nowrap ml-auto">
-              Optimal: {iaSt.optPow}% power · CV {iaSt.optCv}
+              Optimal: {iaSt.optIAPow}% IA power · CV {iaSt.optCv}
             </span>
           </div>
 
