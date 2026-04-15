@@ -3,7 +3,9 @@ export interface IAStageResult {
   cv: number;
   utility: number;
   fp: number;
-  power: number;
+  power: number;       // cumulative power at this stage (IA-specific)
+  r01m?: number;       // LR(-) ratio: (1 - alpha_spent) / (1 - cumulative_power)
+  maturity?: number;   // events / N total
 }
 
 export interface DesignInputs {
@@ -21,7 +23,8 @@ export interface DesignInputs {
 }
 
 export interface DesignResult {
-  power: number;
+  power: number;       // target FA cumulative power (%)
+  power_IA?: number;   // IA-specific cumulative power at stage 1 (%) — may differ from power
   N: number;
   events_IA: number;
   events_FA: number;
@@ -92,15 +95,18 @@ export async function runOptimization(inputs: DesignInputs): Promise<OptimizeRes
   const data = await res.json();
 
   const coerceStage = (s: Record<string, unknown>): IAStageResult => ({
-    events:  Number(s.events),
-    cv:      Number(s.cv),
-    utility: Number(s.utility),
-    fp:      Number(s.fp),
-    power:   Number(s.power),
+    events:   Number(s.events),
+    cv:       Number(s.cv),
+    utility:  Number(s.utility),
+    fp:       Number(s.fp),
+    power:    Number(s.power),
+    r01m:     s.r01m    != null ? Number(s.r01m)    : undefined,
+    maturity: s.maturity != null ? Number(s.maturity) : undefined,
   });
 
   const coerce = (r: Record<string, unknown>): DesignResult => ({
     power:      Number(r.power),
+    power_IA:   r.power_IA != null ? Number(r.power_IA) : undefined,
     N:          Number(r.N),
     events_IA:  Number(r.events_IA),
     events_FA:  Number(r.events_FA),
@@ -172,7 +178,7 @@ ratio  <- 1
 
 # ── Power sweep ───────────────────────────────────────────────────────────────
 
-pwr_seq <- c(seq(0.10, 0.95, 0.05), 0.99)
+pwr_seq <- c(seq(0.50, 0.95, 0.05), 0.99)
 lpwr    <- length(pwr_seq)
 
 U1s    <- matrix(NA, lpwr, k)

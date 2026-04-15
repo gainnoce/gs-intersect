@@ -53,7 +53,7 @@ function(req) {
   test.type <- 4
   astar <- 0
 
-  pwr_seq <- c(seq(0.10, 0.95, 0.05), 0.99)
+  pwr_seq <- c(seq(0.50, 0.95, 0.05), 0.99)
   lpwr <- length(pwr_seq)
 
   results <- vector("list", lpwr)
@@ -97,13 +97,17 @@ function(req) {
         calpha_j  <- 2 * fp_j
         lr_j      <- cpwr_j / calpha_j
         utility_j <- (1 - cv_j) * lr_j
+        r01m_j    <- (1 - calpha_j) / (1 - cpwr_j)
+        maturity_j <- round(ne_j / N_total, 4)
 
         all_stages[[j]] <- list(
-          events  = ne_j,
-          cv      = round(cv_j, 4),
-          utility = round(utility_j, 4),
-          fp      = round(fp_j, 6),
-          power   = round(cpwr_j * 100, 1)
+          events   = ne_j,
+          cv       = round(cv_j, 4),
+          utility  = round(utility_j, 4),
+          fp       = round(fp_j, 6),
+          power    = round(cpwr_j * 100, 1),
+          r01m     = round(r01m_j, 4),
+          maturity = maturity_j
         )
       }
 
@@ -114,6 +118,7 @@ function(req) {
       # Backward-compatible top-level fields use IA stage 1 and FA
       results[[i]] <- list(
         power      = round(pwr_seq[i] * 100, 1),
+        power_IA   = ia_stages[[1]]$power,   # IA-specific cumulative power (distinct from FA target)
         N          = N_total,
         events_IA  = ia_stages[[1]]$events,
         events_FA  = fa_stage$events,
