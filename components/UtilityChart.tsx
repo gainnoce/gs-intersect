@@ -31,17 +31,18 @@ const baseAxis = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getPlotly = () => (window as any).Plotly;
 
-// Build initial CV tick arrays — stride controls density, always includes optimal event.
+// Build initial CV tick arrays — stride controls density, always includes all pinned events.
 const makeInitTicks = (
   events: number[],
   labels: string[],
-  optEvent: number,
+  optEvent: number | number[],
   stride: number,
   startIdx = 0,
 ) => {
   const labelMap = new Map(events.map((e, i) => [e, labels[i]]));
   const strided  = events.filter((_, i) => i >= startIdx && (i - startIdx) % stride === 0);
-  const unique   = [...new Set([...strided, optEvent])].sort((a, b) => a - b);
+  const pins     = Array.isArray(optEvent) ? optEvent : [optEvent];
+  const unique   = [...new Set([...strided, ...pins])].sort((a, b) => a - b);
   return { vals: unique, labels: unique.map(e => labelMap.get(e) ?? "") };
 };
 
@@ -165,13 +166,15 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     const optEv  = opt.ia_stages?.[j]?.events  ?? opt.events_IA;
     const optUt  = opt.ia_stages?.[j]?.utility ?? opt.utility_IA;
     const optCv  = (opt.ia_stages?.[j]?.cv ?? opt.cv_IA).toFixed(3);
-    const optPow   = opt.power;
+    const optPow       = opt.power;
     // IA-specific cumulative power (may differ from optPow which is the FA target)
-    const optIAPow = opt.ia_stages?.[j]?.power ?? opt.power_IA ?? opt.power;
+    const optIAPow     = opt.ia_stages?.[j]?.power ?? opt.power_IA ?? opt.power;
+    // Events at this IA stage under the FA-optimal design — pinned as cross-reference tick
+    const faOptEvAtStage = optimal_FA.ia_stages?.[j]?.events ?? optimal_FA.events_IA;
     const sorted = [...results].sort((a, b) =>
       (a.ia_stages?.[j]?.utility ?? a.utility_IA) - (b.ia_stages?.[j]?.utility ?? b.utility_IA)
     );
-    return { events, utils, cvs, opt, optEv, optUt, optCv, optPow, optIAPow, sorted };
+    return { events, utils, cvs, opt, optEv, optUt, optCv, optPow, optIAPow, faOptEvAtStage, sorted };
   });
 
   const eventsFA  = results.map(r => r.events_FA);
@@ -197,7 +200,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   // ── Dynamic CV tick density on zoom ───────────────────────────────────
   const makeCvRelayout = (
     divRef: HTMLElement | null,
-    axes: { key: string; events: number[]; labels: string[]; optEvent: number }[],
+    axes: { key: string; events: number[]; labels: string[]; optEvent: number | number[] }[],
     chartXMin: number,
     chartXMax: number,
   ) => (relayoutData: Record<string, unknown>) => {
@@ -216,7 +219,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       const n        = visible.length;
       const stride   = n > 12 ? 3 : n > 6 ? 2 : 1;
       const strided  = visible.filter((_, i) => i % stride === 0);
-      const unique   = [...new Set([...strided, ...(visible.includes(optEvent) ? [optEvent] : [])])].sort((a, b) => a - b);
+      const pins     = Array.isArray(optEvent) ? optEvent : [optEvent];
+      const unique   = [...new Set([...strided, ...pins.filter(e => visible.includes(e))])].sort((a, b) => a - b);
       update[`${key}.tickvals`] = unique;
       update[`${key}.ticktext`] = unique.map(e => labelMap.get(e) ?? "");
     });
@@ -342,10 +346,10 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     const jYRange = yHeadroom(st.utils);
     const naturalW = xPad(st.events)[1] - xPad(st.events)[0];
     const rangeW   = jXRange[1] - jXRange[0];
-    const stride   = Math.min(6, Math.max(1, Math.round(2 * rangeW / naturalW)));
-    const init     = makeInitTicks(st.events, st.cvs, st.optEv, stride);
+    const stride      = Math.min(6, Math.max(1, Math.round(2 * rangeW / naturalW)));
     // Events at this IA stage under the FA-optimal design (cross-reference)
     const faOptEvAtIA = optimal_FA.ia_stages?.[j]?.events ?? optimal_FA.events_IA;
+    const init        = makeInitTicks(st.events, st.cvs, [st.optEv, faOptEvAtIA], stride);
     const data: Plotly.Data[] = [
       // Reference lines behind the curve (solid = IA-optimal, dashed = FA-optimal)
       vline(st.optEv, jYRange, color, "solid", "Optimal for IA"),
@@ -585,7 +589,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
                     onUpdate={(_, div)       => setIaDivs(prev => prev[j] === div ? prev : prev.map((d, i) => i === j ? div : d))}
                     onRelayout={makeCvRelayout(
                       iaDivs[j],
-                      [{ key: "xaxis2", events: stagesData[j].events, labels: stagesData[j].cvs, optEvent: stagesData[j].optEv }],
+                      [{ key: "xaxis2", events: stagesData[j].events, labels: stagesData[j].cvs, optEvent: [stagesData[j].optEv, stagesData[j].faOptEvAtStage] }],
                       jXRange[0], jXRange[1],
                     )}
                   />
@@ -673,7 +677,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             onUpdate={(_, div)       => setFaDiv(div)}
             onRelayout={makeCvRelayout(
               faDiv,
-              [{ key: "xaxis2", events: eventsFA, labels: cvFA, optEvent: optimal_FA.events_FA }],
+              [{ key: "xaxis2", events: eventsFA, labels: cvFA, optEvent: [optimal_FA.events_FA, iaOptEvAtFA] }],
               faXRange[0], faXRange[1],
             )}
           />
