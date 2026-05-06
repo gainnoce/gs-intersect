@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, ImageDown, ChevronLeft, ChevronRight } from "lucide-react";
@@ -156,6 +156,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   const [vis,        setVis]        = useState<boolean[]>(Array(numIAs + 1).fill(true));
   const [logScale,   setLogScale]   = useState(false);
   const [sharedX,    setSharedX]    = useState(false);
+  const [mounted,    setMounted]    = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // ── Per-stage data ────────────────────────────────────────────────────
   const stagesData = Array.from({ length: numIAs }, (_, j) => {
@@ -310,13 +312,33 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   // Vertical reference line — solid for the chart's own optimal, dashed for the cross-optimal.
   // Drawn before the curve so it sits behind all data.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const vline = (x: number, yRange: number[], color: string, dash: "solid" | "dash", hoverLabel: string): any => ({
+  const vline = (x: number, yRange: number[], color: string, dash: "solid" | "dash", hoverLabel: string, extra?: { cv?: string; power?: number; utility?: number }): any => ({
     x: [x, x], y: [yRange[0], yRange[1]],
     type: "scatter", mode: "lines",
     line: { color, width: dash === "solid" ? 2 : 1.5, dash },
-    hovertemplate: `${hoverLabel}<br>Events: ${x}<extra></extra>`,
+    hovertemplate: extra
+      ? `<b>${hoverLabel}</b><br>Events: ${x}${extra.power !== undefined ? `<br>Power: ${extra.power.toFixed(1)}%` : ""}${extra.cv ? `<br>CV: ${extra.cv}` : ""}${extra.utility !== undefined ? `<br>Utility: ${extra.utility.toFixed(4)}` : ""}<extra></extra>`
+      : `${hoverLabel}<br>Events: ${x}<extra></extra>`,
     showlegend: false, xaxis: "x", yaxis: "y",
   });
+
+  // Small inline legend explaining the two vertical bar styles used in single charts.
+  const VlineLegend = ({ color, thisLabel, otherLabel }: { color: string; thisLabel: string; otherLabel: string }) => (
+    <div className="flex items-center gap-3 text-[10px] text-az-graphite">
+      <span className="flex items-center gap-1">
+        <svg width="10" height="16" viewBox="0 0 10 16">
+          <line x1="5" y1="0" x2="5" y2="16" stroke={color} strokeWidth="2" />
+        </svg>
+        {thisLabel}
+      </span>
+      <span className="flex items-center gap-1">
+        <svg width="10" height="16" viewBox="0 0 10 16">
+          <line x1="5" y1="0" x2="5" y2="16" stroke={color} strokeWidth="1.5" strokeDasharray="3 2" />
+        </svg>
+        {otherLabel}
+      </span>
+    </div>
+  );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const optStar = (x: number, y: number, cv: string, power: number, color: string, label: string, chartXRange?: number[], forcedPos?: string): any => {
@@ -341,7 +363,6 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   // Print CSS reveals them all stacked.
   const allIACharts = stagesData.map((st, j) => {
     const color   = IA_COLORS[j % IA_COLORS.length];
-    const optCol  = IA_OPT_COLORS[j % IA_OPT_COLORS.length];
     const jXRange = sharedX ? xRange : xPad(st.events);
     const jYRange = yHeadroom(st.utils);
     const naturalW = xPad(st.events)[1] - xPad(st.events)[0];
@@ -350,11 +371,12 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     // Events at this IA stage under the FA-optimal design (cross-reference)
     const faOptEvAtIA = optimal_FA.ia_stages?.[j]?.events ?? optimal_FA.events_IA;
     const init        = makeInitTicks(st.events, st.cvs, [st.optEv, faOptEvAtIA], stride);
+    const faOptCvAtStage = (optimal_FA.ia_stages?.[j]?.cv ?? optimal_FA.cv_IA).toFixed(3);
     const data: Plotly.Data[] = [
       // Reference lines behind the curve (solid = IA-optimal, dashed = FA-optimal)
-      vline(st.optEv, jYRange, color, "solid", "Optimal for IA"),
+      vline(st.optEv, jYRange, color, "solid", `Optimal N for IA${numIAs > 1 ? ` ${j + 1}` : ""}`, { cv: st.optCv, power: st.optIAPow, utility: st.optUt }),
       ...(faOptEvAtIA !== st.optEv
-        ? [vline(faOptEvAtIA, jYRange, color, "dash", "Optimal for FA (reference)")]
+        ? [vline(faOptEvAtIA, jYRange, color, "dash", "Optimal N for FA (reference)", { cv: faOptCvAtStage, power: optimal_FA.power })]
         : []),
       {
         x: st.events, y: st.utils, type: "scatter", mode: "lines+markers",
@@ -363,7 +385,6 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
         hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
         showlegend: false, xaxis: "x", yaxis: "y",
       },
-      optStar(st.optEv, st.optUt, st.optCv, st.optIAPow, optCol, `Optimal IA${numIAs > 1 ? ` ${j + 1}` : ""}`, jXRange),
       {
         x: init.vals, y: init.vals.map(() => null as unknown as number),
         type: "scatter", mode: "markers",
@@ -388,9 +409,9 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   const iaOptEvAtFA = optimal_IA.events_FA;
   const faData: Plotly.Data[] = [
     // Reference lines behind the curve (solid = FA-optimal, dashed = IA-optimal)
-    vline(optimal_FA.events_FA, faYRange, FA_COLOR, "solid", "Optimal for FA"),
+    vline(optimal_FA.events_FA, faYRange, FA_COLOR, "solid", "Optimal N for FA", { cv: optimal_FA.cv_FA.toFixed(3), power: optimal_FA.power, utility: optimal_FA.utility_FA }),
     ...(iaOptEvAtFA !== optimal_FA.events_FA
-      ? [vline(iaOptEvAtFA, faYRange, FA_COLOR, "dash", "Optimal for IA (reference)")]
+      ? [vline(iaOptEvAtFA, faYRange, FA_COLOR, "dash", "Optimal N for IA (reference)", { cv: optimal_IA.cv_FA.toFixed(3), power: optimal_IA.power })]
       : []),
     {
       x: eventsFA, y: utilFA, type: "scatter", mode: "lines+markers",
@@ -399,7 +420,6 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       hovertemplate: "<b>Power: %{text}</b><br>Events: %{x}<br>CV: %{customdata:.4f}<br>Utility: %{y:.4f}<extra></extra>",
       showlegend: false, xaxis: "x", yaxis: "y",
     },
-    optStar(optimal_FA.events_FA, optimal_FA.utility_FA, optimal_FA.cv_FA.toFixed(3), optimal_FA.power, FA_OPT_COLOR, "Optimal FA", faXRange),
     {
       x: faInit.vals, y: faInit.vals.map(() => null as unknown as number),
       type: "scatter", mode: "markers",
@@ -580,26 +600,29 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
                       <span className="text-xs font-semibold text-az-navy">Interim Analysis — Stage {j + 1}</span>
                     </div>
                   )}
-                  <Plot
-                    data={data}
-                    layout={layout}
-                    config={{ displayModeBar: false, responsive: true }}
-                    style={{ width: "100%", height: "340px" }}
-                    onInitialized={(_, div) => setIaDivs(prev => prev[j] === div ? prev : prev.map((d, i) => i === j ? div : d))}
-                    onUpdate={(_, div)       => setIaDivs(prev => prev[j] === div ? prev : prev.map((d, i) => i === j ? div : d))}
-                    onRelayout={makeCvRelayout(
-                      iaDivs[j],
-                      [{ key: "xaxis2", events: stagesData[j].events, labels: stagesData[j].cvs, optEvent: [stagesData[j].optEv, stagesData[j].faOptEvAtStage] }],
-                      jXRange[0], jXRange[1],
-                    )}
-                  />
+                  {mounted && (
+                    <Plot
+                      data={data}
+                      layout={layout}
+                      config={{ displayModeBar: false, responsive: true }}
+                      style={{ width: "100%", height: "340px" }}
+                      onInitialized={(_, div) => setIaDivs(prev => prev[j] === div ? prev : prev.map((d, i) => i === j ? div : d))}
+                      onUpdate={(_, div)       => setIaDivs(prev => prev[j] === div ? prev : prev.map((d, i) => i === j ? div : d))}
+                      onRelayout={makeCvRelayout(
+                        iaDivs[j],
+                        [{ key: "xaxis2", events: stagesData[j].events, labels: stagesData[j].cvs, optEvent: [stagesData[j].optEv, stagesData[j].faOptEvAtStage] }],
+                        jXRange[0], jXRange[1],
+                      )}
+                    />
+                  )}
                 </div>
               );
             })}
           </div>
           <div className="flex items-center px-5 pb-4 pt-2">
-            {/* Left zone: Share x-axis (k>2 only) */}
-            <div className="flex-1 flex items-center">
+            {/* Left zone: vline legend + Share x-axis (k>2 only) */}
+            <div className="flex-1 flex items-center gap-3 flex-wrap">
+              <VlineLegend color={iaColor} thisLabel="N for IA" otherLabel="N for FA" />
               {numIAs > 1 && (
                 <Button
                   variant="outline" size="sm"
@@ -668,20 +691,23 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
               Optimal: {optimal_FA.power}% power · CV {optimal_FA.cv_FA.toFixed(3)}
             </span>
           </div>
-          <Plot
-            data={faData}
-            layout={faLayout}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: "100%", height: "340px" }}
-            onInitialized={(_, div) => setFaDiv(div)}
-            onUpdate={(_, div)       => setFaDiv(div)}
-            onRelayout={makeCvRelayout(
-              faDiv,
-              [{ key: "xaxis2", events: eventsFA, labels: cvFA, optEvent: [optimal_FA.events_FA, iaOptEvAtFA] }],
-              faXRange[0], faXRange[1],
-            )}
-          />
-          <div className="flex justify-end gap-2 px-5 pb-4 pt-2">
+          {mounted && (
+            <Plot
+              data={faData}
+              layout={faLayout}
+              config={{ displayModeBar: false, responsive: true }}
+              style={{ width: "100%", height: "340px" }}
+              onInitialized={(_, div) => setFaDiv(div)}
+              onUpdate={(_, div)       => setFaDiv(div)}
+              onRelayout={makeCvRelayout(
+                faDiv,
+                [{ key: "xaxis2", events: eventsFA, labels: cvFA, optEvent: [optimal_FA.events_FA, iaOptEvAtFA] }],
+                faXRange[0], faXRange[1],
+              )}
+            />
+          )}
+          <div className="flex items-center justify-between px-5 pb-4 pt-2">
+            <VlineLegend color={FA_COLOR} thisLabel="N for FA" otherLabel="N for IA" />
             <ChartButtons div={faDiv} name="gs-intersect-FA" axes={AXES_SINGLE} />
           </div>
         </div>
@@ -710,24 +736,26 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
           </Button>
         </div>
 
-        <Plot
-          data={overlayData}
-          layout={overlayLayout}
-          config={{ displayModeBar: false, responsive: true }}
-          style={{ width: "100%", height: "460px" }}
-          onInitialized={(_, div) => setOverlayDiv(div)}
-          onUpdate={(_, div)       => setOverlayDiv(div)}
-          onRelayout={numK === 2
-            ? makeCvRelayout(
-                overlayDiv,
-                [
-                  { key: "xaxis2", events: stagesData[0].events, labels: stagesData[0].cvs, optEvent: stagesData[0].optEv },
-                  { key: "xaxis3", events: eventsFA, labels: cvFA, optEvent: optimal_FA.events_FA },
-                ],
-                xMin, xMax,
-              )
-            : () => undefined}
-        />
+        {mounted && (
+          <Plot
+            data={overlayData}
+            layout={overlayLayout}
+            config={{ displayModeBar: false, responsive: true }}
+            style={{ width: "100%", height: "460px" }}
+            onInitialized={(_, div) => setOverlayDiv(div)}
+            onUpdate={(_, div)       => setOverlayDiv(div)}
+            onRelayout={numK === 2
+              ? makeCvRelayout(
+                  overlayDiv,
+                  [
+                    { key: "xaxis2", events: stagesData[0].events, labels: stagesData[0].cvs, optEvent: stagesData[0].optEv },
+                    { key: "xaxis3", events: eventsFA, labels: cvFA, optEvent: optimal_FA.events_FA },
+                  ],
+                  xMin, xMax,
+                )
+              : () => undefined}
+          />
+        )}
 
         {/* Legend — full-width wrapping row, centred */}
         <div className="flex flex-wrap justify-center gap-2 px-5 pt-2 pb-3">
