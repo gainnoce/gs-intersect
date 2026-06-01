@@ -237,18 +237,97 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     getPlotly().relayout(div, update);
   };
 
-  const downloadPng = (div: HTMLElement | null, name: string) => {
+  // Build a PNG from the div's current figure but with an injected title + legend,
+  // without touching the live chart. vlines get named entries in the legend.
+  const downloadPngWithMeta = async (
+    div: HTMLElement | null,
+    name: string,
+    title: string,
+    solidLabel: string,
+    dashedLabel: string | null,
+  ) => {
     if (!div || !getPlotly()) return;
-    getPlotly().downloadImage(div, { format: "png", filename: name, scale: 2 });
+    const Plotly = getPlotly();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const divAny = div as any;
+    const currentData: PlotlyTrace[] = divAny.data ?? [];
+    const currentLayout = divAny.layout ?? {};
+
+    const exportData = currentData.map((trace: PlotlyTrace) => {
+      if (trace.mode === "lines" && Array.isArray(trace.x) && trace.x.length === 2 && trace.x[0] === trace.x[1]) {
+        const isDashed = trace.line?.dash === "dash";
+        if (!isDashed && solidLabel)  return { ...trace, showlegend: true, name: solidLabel };
+        if (isDashed  && dashedLabel) return { ...trace, showlegend: true, name: dashedLabel };
+      }
+      return trace;
+    });
+
+    const exportLayout = {
+      ...currentLayout,
+      title: { text: title, font: { family: "Inter, sans-serif", size: 13, color: "#1a2e44" }, x: 0.5, xanchor: "center" },
+      showlegend: true,
+      legend: { orientation: "h", x: 0.5, xanchor: "center", y: -0.22, font: { family: "Inter, sans-serif", size: 10, color: "#3f4444" } },
+      margin: { ...currentLayout.margin, b: (currentLayout.margin?.b ?? 50) + 50, t: (currentLayout.margin?.t ?? 76) + 10 },
+    };
+
+    const url: string = await Plotly.toImage(
+      { data: exportData, layout: exportLayout },
+      { format: "png", scale: 2, width: div.clientWidth, height: div.clientHeight + 60 },
+    );
+    const a = document.createElement("a");
+    a.href = url; a.download = `${name}.png`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  const ChartButtons = ({ div, name, axes }: { div: HTMLElement | null; name: string; axes: string[] }) => (
+  // Overlay PNG: curve traces get named legend entries; stars are suppressed from legend.
+  const downloadOverlayPng = async (div: HTMLElement | null, name: string) => {
+    if (!div || !getPlotly()) return;
+    const Plotly = getPlotly();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const divAny = div as any;
+    const currentData: PlotlyTrace[] = divAny.data ?? [];
+    const currentLayout = divAny.layout ?? {};
+
+    const curveLabels = [
+      ...stagesData.map((_, j) => numIAs === 1 ? "Interim Analysis" : `IA Stage ${j + 1}`),
+      "Final Analysis",
+    ];
+    let curveIdx = 0;
+    const exportData = currentData.map((trace: PlotlyTrace) => {
+      if (trace.mode === "lines+markers" && Array.isArray(trace.x) && trace.x.length > 2) {
+        return { ...trace, showlegend: true, name: curveLabels[curveIdx++] ?? trace.name };
+      }
+      return trace;
+    });
+
+    const exportTitle = numIAs === 1
+      ? "Combined View — IA + FA Utility"
+      : `Combined View — ${numIAs} IAs + FA Utility`;
+
+    const exportLayout = {
+      ...currentLayout,
+      title: { text: exportTitle, font: { family: "Inter, sans-serif", size: 13, color: "#1a2e44" }, x: 0.5, xanchor: "center" },
+      showlegend: true,
+      legend: { orientation: "h", x: 0.5, xanchor: "center", y: -0.18, font: { family: "Inter, sans-serif", size: 10, color: "#3f4444" } },
+      margin: { ...currentLayout.margin, b: (currentLayout.margin?.b ?? 52) + 50, t: (currentLayout.margin?.t ?? 76) + 10 },
+    };
+
+    const url: string = await Plotly.toImage(
+      { data: exportData, layout: exportLayout },
+      { format: "png", scale: 2, width: div.clientWidth, height: div.clientHeight + 60 },
+    );
+    const a = document.createElement("a");
+    a.href = url; a.download = `${name}.png`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
+  const ChartButtons = ({ div, name, axes, onDownload }: { div: HTMLElement | null; name: string; axes: string[]; onDownload?: () => void }) => (
     <div className="flex justify-end gap-2">
       <Button variant="outline" size="sm" onClick={() => resetView(div, axes)}
         className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs h-7">
         <RotateCcw className="w-3 h-3" /> Reset
       </Button>
-      <Button variant="outline" size="sm" onClick={() => downloadPng(div, name)}
+      <Button variant="outline" size="sm" onClick={() => onDownload ? onDownload() : undefined}
         className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs h-7">
         <ImageDown className="w-3 h-3" /> PNG
       </Button>
@@ -299,6 +378,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       } as Partial<Plotly.LayoutAxis>,
       yaxis2: {
         overlaying: "y", side: "right",
+        range: yRange,
         tickvals: sortedRows.map(r => getUtil(r)),
         ticktext: sortedRows.map(r => `${getPower(r).toFixed(1)}%`),
         tickfont: { color: accentColor, size: 9 },
@@ -391,6 +471,12 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
         marker: { opacity: 0, size: 1 }, showlegend: false,
         xaxis: "x2", yaxis: "y", hoverinfo: "skip" as const,
       },
+      // Ghost trace — forces Plotly to render yaxis2 (power axis) even without real data on it
+      {
+        x: [null], y: [null], type: "scatter", mode: "markers",
+        marker: { opacity: 0, size: 0 }, showlegend: false,
+        xaxis: "x", yaxis: "y2", hoverinfo: "skip" as const,
+      },
     ];
     const layout = singleLayout(
       init.vals, init.labels, st.sorted,
@@ -425,6 +511,12 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       type: "scatter", mode: "markers",
       marker: { opacity: 0, size: 1 }, showlegend: false,
       xaxis: "x2", yaxis: "y", hoverinfo: "skip" as const,
+    },
+    // Ghost trace — forces Plotly to render yaxis2 (power axis)
+    {
+      x: [null], y: [null], type: "scatter", mode: "markers",
+      marker: { opacity: 0, size: 0 }, showlegend: false,
+      xaxis: "x", yaxis: "y2", hoverinfo: "skip" as const,
     },
   ];
 
@@ -675,7 +767,18 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             )}
             {/* Right zone: Reset + PNG */}
             <div className="flex-1 flex justify-end gap-2">
-              <ChartButtons div={iaDivs[activeIA]} name={`gs-intersect-IA${numIAs > 1 ? activeIA + 1 : ""}`} axes={AXES_SINGLE} />
+              <ChartButtons
+                div={iaDivs[activeIA]}
+                name={`gs-intersect-IA${numIAs > 1 ? activeIA + 1 : ""}`}
+                axes={AXES_SINGLE}
+                onDownload={() => downloadPngWithMeta(
+                  iaDivs[activeIA],
+                  `gs-intersect-IA${numIAs > 1 ? activeIA + 1 : ""}`,
+                  numIAs === 1 ? "Interim Analysis — Utility" : `Interim Analysis Stage ${activeIA + 1} — Utility`,
+                  "N optimising IA",
+                  "N optimising FA (reference)",
+                )}
+              />
             </div>
           </div>
         </div>
@@ -708,7 +811,18 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
           )}
           <div className="flex items-center justify-between px-5 pb-4 pt-2">
             <VlineLegend color={FA_COLOR} thisLabel="N for FA" otherLabel="N for IA" />
-            <ChartButtons div={faDiv} name="gs-intersect-FA" axes={AXES_SINGLE} />
+            <ChartButtons
+              div={faDiv}
+              name="gs-intersect-FA"
+              axes={AXES_SINGLE}
+              onDownload={() => downloadPngWithMeta(
+                faDiv,
+                "gs-intersect-FA",
+                "Final Analysis — Utility",
+                "N optimising FA",
+                "N optimising IA (reference)",
+              )}
+            />
           </div>
         </div>
       </div>
@@ -795,7 +909,12 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             )}
           </div>
           <div className="shrink-0">
-            <ChartButtons div={overlayDiv} name="gs-intersect-combined" axes={numK === 2 ? AXES_OVL_K2 : AXES_OVL_KN} />
+            <ChartButtons
+              div={overlayDiv}
+              name="gs-intersect-combined"
+              axes={numK === 2 ? AXES_OVL_K2 : AXES_OVL_KN}
+              onDownload={() => downloadOverlayPng(overlayDiv, "gs-intersect-combined")}
+            />
           </div>
         </div>
       </div>
