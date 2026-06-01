@@ -149,7 +149,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   const numK   = k ?? 2;
   const numIAs = numK - 1;
 
-  const [iaDivs,     setIaDivs]     = useState<(HTMLElement | null)[]>(Array(numIAs).fill(null));
+  const [iaDiv,      setIaDiv]      = useState<HTMLElement | null>(null);
   const [faDiv,      setFaDiv]      = useState<HTMLElement | null>(null);
   const [overlayDiv, setOverlayDiv] = useState<HTMLElement | null>(null);
   const [activeIA,   setActiveIA]   = useState(0);
@@ -705,41 +705,27 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             </span>
           </div>
 
-          {/* All IA stage charts — active one visible, others opacity-0 absolute.
-              Print CSS (.ia-chart-wrapper / .ia-chart-slide) stacks all. */}
-          <div className="ia-chart-wrapper relative" style={{ height: "340px" }}>
-            {allIACharts.map(({ data, layout, jXRange, init }, j) => {
-              const isActive = j === activeIA;
+          {/* Single Plot — data/layout swap when activeIA changes via Plotly.react.
+              One instance means no hidden charts can steal hover events. */}
+          <div className="relative" style={{ height: "340px" }}>
+            {mounted && (() => {
+              const { data, layout, jXRange } = allIACharts[activeIA];
               return (
-                <div
-                  key={j}
-                  className={`ia-chart-slide ${isActive ? "relative h-full" : "absolute inset-0 opacity-0 ia-slide-inactive"}`}
-                >
-                  {/* Print-only stage label shown above each non-active chart */}
-                  {numIAs > 1 && (
-                    <div className={`${isActive ? "hidden" : "hidden"} print:flex items-center gap-2 px-5 pt-3 pb-0`}>
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: IA_COLORS[j % IA_COLORS.length] }} />
-                      <span className="text-xs font-semibold text-az-navy">Interim Analysis — Stage {j + 1}</span>
-                    </div>
+                <Plot
+                  data={data}
+                  layout={layout}
+                  config={{ displayModeBar: false, responsive: true }}
+                  style={{ width: "100%", height: "340px" }}
+                  onInitialized={(_, div) => setIaDiv(div)}
+                  onUpdate={(_, div)       => setIaDiv(div)}
+                  onRelayout={makeCvRelayout(
+                    iaDiv,
+                    [{ key: "xaxis2", events: stagesData[activeIA].events, labels: stagesData[activeIA].cvs, optEvent: [stagesData[activeIA].optEv, stagesData[activeIA].faOptEvAtStage] }],
+                    jXRange[0], jXRange[1],
                   )}
-                  {mounted && (
-                    <Plot
-                      data={data}
-                      layout={layout}
-                      config={{ displayModeBar: false, responsive: true }}
-                      style={{ width: "100%", height: "340px" }}
-                      onInitialized={(_, div) => setIaDivs(prev => prev[j] === div ? prev : prev.map((d, i) => i === j ? div : d))}
-                      onUpdate={(_, div)       => setIaDivs(prev => prev[j] === div ? prev : prev.map((d, i) => i === j ? div : d))}
-                      onRelayout={makeCvRelayout(
-                        iaDivs[j],
-                        [{ key: "xaxis2", events: stagesData[j].events, labels: stagesData[j].cvs, optEvent: [stagesData[j].optEv, stagesData[j].faOptEvAtStage] }],
-                        jXRange[0], jXRange[1],
-                      )}
-                    />
-                  )}
-                </div>
+                />
               );
-            })}
+            })()}
           </div>
           <div className="flex items-center px-5 pb-4 pt-2">
             {/* Left zone: vline legend + Share x-axis (k>2 only) */}
@@ -798,11 +784,11 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             {/* Right zone: Reset + PNG */}
             <div className="flex-1 flex justify-end gap-2">
               <ChartButtons
-                div={iaDivs[activeIA]}
+                div={iaDiv}
                 name={`gs-intersect-IA${numIAs > 1 ? activeIA + 1 : ""}`}
                 axes={AXES_SINGLE}
                 onDownload={() => downloadPngWithMeta(
-                  iaDivs[activeIA],
+                  iaDiv,
                   `gs-intersect-IA${numIAs > 1 ? activeIA + 1 : ""}`,
                   numIAs === 1 ? "Interim Analysis — Utility" : `Interim Analysis Stage ${activeIA + 1} — Utility`,
                   "N optimising IA",
