@@ -423,13 +423,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   // Vertical reference line — solid for the chart's own optimal, dashed for the cross-optimal.
   // Drawn before the curve so it sits behind all data.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const vline = (x: number, yRange: number[], color: string, dash: "solid" | "dash", hoverLabel: string, extra?: { cv?: string; power?: number; utility?: number }): any => ({
+  // vlines are purely visual — hoverinfo:"skip" keeps them out of Plotly's "closest"
+  // detection so the curve dots always win hover at the same x-column.
+  const vline = (x: number, yRange: number[], color: string, dash: "solid" | "dash"): any => ({
     x: [x, x], y: [yRange[0], yRange[1]],
     type: "scatter", mode: "lines",
     line: { color, width: dash === "solid" ? 2 : 1.5, dash },
-    hovertemplate: extra
-      ? `<b>${hoverLabel}</b><br>Events: ${x}${extra.power !== undefined ? `<br>Power: ${extra.power.toFixed(1)}%` : ""}${extra.cv ? `<br>CV: ${extra.cv}` : ""}${extra.utility !== undefined ? `<br>Utility: ${extra.utility.toFixed(4)}` : ""}<extra></extra>`
-      : `${hoverLabel}<br>Events: ${x}<extra></extra>`,
+    hoverinfo: "skip" as const,
     showlegend: false, xaxis: "x", yaxis: "y",
   });
 
@@ -482,12 +482,11 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     // Events at this IA stage under the FA-optimal design (cross-reference)
     const faOptEvAtIA = optimal_FA.ia_stages?.[j]?.events ?? optimal_FA.events_IA;
     const init        = makeInitTicks(st.events, st.cvs, [st.optEv, faOptEvAtIA], stride);
-    const faOptCvAtStage = (optimal_FA.ia_stages?.[j]?.cv ?? optimal_FA.cv_IA).toFixed(3);
     const data: Plotly.Data[] = [
       // Reference lines behind the curve (solid = IA-optimal, dashed = FA-optimal)
-      vline(st.optEv, jYRange, color, "solid", `Optimal N for IA${numIAs > 1 ? ` ${j + 1}` : ""}`, { cv: st.optCv, power: st.optIAPow, utility: st.optUt }),
+      vline(st.optEv, jYRange, color, "solid"),
       ...(faOptEvAtIA !== st.optEv
-        ? [vline(faOptEvAtIA, jYRange, color, "dash", "Optimal N for FA (reference)", { cv: faOptCvAtStage, power: optimal_FA.power })]
+        ? [vline(faOptEvAtIA, jYRange, color, "dash")]
         : []),
       {
         x: st.events, y: st.utils, type: "scatter", mode: "lines+markers",
@@ -526,9 +525,9 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   const iaOptEvAtFA = optimal_IA.events_FA;
   const faData: Plotly.Data[] = [
     // Reference lines behind the curve (solid = FA-optimal, dashed = IA-optimal)
-    vline(optimal_FA.events_FA, faYRange, FA_COLOR, "solid", "Optimal N for FA", { cv: optimal_FA.cv_FA.toFixed(3), power: optimal_FA.power, utility: optimal_FA.utility_FA }),
+    vline(optimal_FA.events_FA, faYRange, FA_COLOR, "solid"),
     ...(iaOptEvAtFA !== optimal_FA.events_FA
-      ? [vline(iaOptEvAtFA, faYRange, FA_COLOR, "dash", "Optimal N for IA (reference)", { cv: optimal_IA.cv_FA.toFixed(3), power: optimal_IA.power })]
+      ? [vline(iaOptEvAtFA, faYRange, FA_COLOR, "dash")]
       : []),
     {
       x: eventsFA, y: utilFA, type: "scatter", mode: "lines+markers",
