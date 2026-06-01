@@ -267,12 +267,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       title: { text: title, font: { family: "Inter, sans-serif", size: 13, color: "#1a2e44" }, x: 0.5, xanchor: "center" },
       showlegend: true,
       legend: { orientation: "h", x: 0.5, xanchor: "center", y: -0.22, font: { family: "Inter, sans-serif", size: 10, color: "#3f4444" } },
-      margin: { ...currentLayout.margin, b: (currentLayout.margin?.b ?? 50) + 50, t: (currentLayout.margin?.t ?? 76) + 10 },
+      // +40 on top clears the title above the CV (xaxis2) labels; +50 on bottom fits the legend
+      margin: { ...currentLayout.margin, b: (currentLayout.margin?.b ?? 50) + 50, t: (currentLayout.margin?.t ?? 76) + 40 },
     };
 
     const url: string = await Plotly.toImage(
       { data: exportData, layout: exportLayout },
-      { format: "png", scale: 2, width: div.clientWidth, height: div.clientHeight + 60 },
+      { format: "png", scale: 2, width: div.clientWidth, height: div.clientHeight + 90 },
     );
     const a = document.createElement("a");
     a.href = url; a.download = `${name}.png`;
@@ -309,12 +310,12 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       title: { text: exportTitle, font: { family: "Inter, sans-serif", size: 13, color: "#1a2e44" }, x: 0.5, xanchor: "center" },
       showlegend: true,
       legend: { orientation: "h", x: 0.5, xanchor: "center", y: -0.18, font: { family: "Inter, sans-serif", size: 10, color: "#3f4444" } },
-      margin: { ...currentLayout.margin, b: (currentLayout.margin?.b ?? 52) + 50, t: (currentLayout.margin?.t ?? 76) + 10 },
+      margin: { ...currentLayout.margin, b: (currentLayout.margin?.b ?? 52) + 50, t: (currentLayout.margin?.t ?? 76) + 40 },
     };
 
     const url: string = await Plotly.toImage(
       { data: exportData, layout: exportLayout },
-      { format: "png", scale: 2, width: div.clientWidth, height: div.clientHeight + 60 },
+      { format: "png", scale: 2, width: div.clientWidth, height: div.clientHeight + 90 },
     );
     const a = document.createElement("a");
     a.href = url; a.download = `${name}.png`;
@@ -376,16 +377,26 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
         title: { text: "Utility Score" },
         range: yRange,
       } as Partial<Plotly.LayoutAxis>,
-      yaxis2: {
-        overlaying: "y", side: "right",
-        range: yRange,
-        tickvals: sortedRows.map(r => getUtil(r)),
-        ticktext: sortedRows.map(r => `${getPower(r).toFixed(1)}%`),
-        tickfont: { color: accentColor, size: 9 },
-        title: { text: powerLabel ?? "Power %", font: { color: accentColor, size: 10 } },
-        showgrid: false, zeroline: false,
-        showline: true, linecolor: accentColor, ticks: "outside",
-      } as Partial<Plotly.LayoutAxis>,
+      yaxis2: (() => {
+        // Thin ticks so labels never overlap. Plot area height ≈ 214 px; allow 13 px/label.
+        const maxTicks = Math.max(2, Math.floor(214 / 13));
+        const n = sortedRows.length;
+        const stride = Math.max(1, Math.ceil(n / maxTicks));
+        const optUtil = n > 0 ? Math.max(...sortedRows.map(r => getUtil(r))) : 0;
+        const thinned = sortedRows.filter((r, i) =>
+          Math.abs(getUtil(r) - optUtil) < 1e-9 || i % stride === 0
+        );
+        return {
+          overlaying: "y", side: "right",
+          range: yRange,
+          tickvals: thinned.map(r => getUtil(r)),
+          ticktext: thinned.map(r => `${getPower(r).toFixed(1)}%`),
+          tickfont: { color: accentColor, size: 9 },
+          title: { text: powerLabel ?? "Power %", font: { color: accentColor, size: 10 } },
+          showgrid: false, zeroline: false,
+          showline: true, linecolor: accentColor, ticks: "outside",
+        } as Partial<Plotly.LayoutAxis>;
+      })(),
     };
   };
 
