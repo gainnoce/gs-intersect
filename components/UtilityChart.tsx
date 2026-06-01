@@ -378,14 +378,34 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
         range: yRange,
       } as Partial<Plotly.LayoutAxis>,
       yaxis2: (() => {
-        // Thin ticks so labels never overlap. Plot area height ≈ 214 px; allow 13 px/label.
-        const maxTicks = Math.max(2, Math.floor(214 / 13));
-        const n = sortedRows.length;
-        const stride = Math.max(1, Math.ceil(n / maxTicks));
-        const optUtil = n > 0 ? Math.max(...sortedRows.map(r => getUtil(r))) : 0;
-        const thinned = sortedRows.filter((r, i) =>
-          Math.abs(getUtil(r) - optUtil) < 1e-9 || i % stride === 0
-        );
+        // Guarantee no two labels overlap by enforcing a minimum utility gap.
+        // Plot area height ≈ 214 px; 14 px per label (font 9 + padding).
+        const ySpan = yRange[1] - yRange[0];
+        const minGap = ySpan > 0 ? (14 * ySpan) / 214 : 0;
+        const optUtil = sortedRows.length > 0 ? Math.max(...sortedRows.map(r => getUtil(r))) : 0;
+
+        // Greedy forward pass (sortedRows is ascending by utility)
+        const greedy: DesignResult[] = [];
+        let lastU = -Infinity;
+        for (const r of sortedRows) {
+          const u = getUtil(r);
+          if (u - lastU >= minGap) { greedy.push(r); lastU = u; }
+        }
+
+        // Force-include optimal if the greedy pass skipped it, then drop any
+        // neighbours that are now within minGap of it.
+        let thinned = greedy;
+        if (!greedy.some(r => Math.abs(getUtil(r) - optUtil) < 1e-9)) {
+          const optRow = sortedRows.find(r => Math.abs(getUtil(r) - optUtil) < 1e-9);
+          if (optRow) {
+            const withOpt = [...greedy, optRow].sort((a, b) => getUtil(a) - getUtil(b));
+            thinned = withOpt.filter(r => {
+              const isOpt = Math.abs(getUtil(r) - optUtil) < 1e-9;
+              return isOpt || Math.abs(getUtil(r) - optUtil) >= minGap;
+            });
+          }
+        }
+
         return {
           overlaying: "y", side: "right",
           range: yRange,
