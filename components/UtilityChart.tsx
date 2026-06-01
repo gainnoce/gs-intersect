@@ -713,7 +713,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
               return (
                 <div
                   key={j}
-                  className={`ia-chart-slide ${isActive ? "relative h-full" : "absolute inset-0 opacity-0 pointer-events-none"}`}
+                  className={`ia-chart-slide ${isActive ? "relative h-full" : "absolute inset-0 opacity-0 ia-slide-inactive"}`}
                 >
                   {/* Print-only stage label shown above each non-active chart */}
                   {numIAs > 1 && (
@@ -736,11 +736,6 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
                         jXRange[0], jXRange[1],
                       )}
                     />
-                  )}
-                  {/* Shield div: sits above Plotly's SVG (which sets pointer-events="all" internally)
-                      on inactive slides, preventing hidden charts from stealing hover/click events. */}
-                  {!isActive && (
-                    <div className="absolute inset-0" style={{ pointerEvents: "auto" }} aria-hidden="true" />
                   )}
                 </div>
               );

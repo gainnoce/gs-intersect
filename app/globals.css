@@ -65,6 +65,13 @@
   }
 }
 
+/* Disable all pointer interaction on inactive IA carousel slides.
+   Must use !important to override Plotly's SVG pointer-events="all" attribute,
+   which sits below CSS author declarations in the cascade. */
+.ia-slide-inactive * {
+  pointer-events: none !important;
+}
+
 @layer utilities {
   @keyframes slide-in {
     from { transform: translateX(100%); opacity: 0; }
