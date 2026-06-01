@@ -737,6 +737,11 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
                       )}
                     />
                   )}
+                  {/* Shield div: sits above Plotly's SVG (which sets pointer-events="all" internally)
+                      on inactive slides, preventing hidden charts from stealing hover/click events. */}
+                  {!isActive && (
+                    <div className="absolute inset-0" style={{ pointerEvents: "auto" }} aria-hidden="true" />
+                  )}
                 </div>
               );
             })}
