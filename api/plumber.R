@@ -1,5 +1,6 @@
 library(plumber)
 library(gsDesign)
+library(clinfun)
 
 #* @apiTitle GS-Intersect API
 #* @apiDescription Utility optimization for Group Sequential survival trial design
@@ -157,6 +158,91 @@ function(req) {
     optimal_IA  = results[[opt_IA]],
     optimal_FA  = results[[opt_FA]],
     optimal_IAs = optimal_IAs
+  )
+}
+
+#* Simon 2-stage design optimization
+#* @post /simon
+function(req) {
+  body <- jsonlite::fromJSON(req$postBody)
+
+  pu   <- as.numeric(body$pu   %||% 0.30)
+  pa   <- as.numeric(body$pa   %||% 0.50)
+  ep1  <- as.numeric(body$ep1  %||% 0.10)
+  nmax <- as.integer(body$nmax %||% 150)
+
+  ep2_seq <- c(0.01, seq(0.05, 0.95, 0.05), 0.99)   # 21 power levels
+  lep2 <- length(ep2_seq)
+
+  results <- vector("list", lep2)
+
+  for (j in seq_len(lep2)) {
+    ep2 <- ep2_seq[j]
+    pwr <- 1 - ep2
+
+    tryCatch({
+      out <- ph2simon(pu, pa, ep1, ep2, nmax)$out
+
+      # Identify rows: optimal = min EN(p0) col 5; minimax = min n col 4.
+      # When both designs are identical, ph2simon returns 1 row.
+      if (nrow(out) == 1) {
+        opt_row <- 1; mmx_row <- 1
+      } else {
+        opt_row <- which.min(out[, 5])   # min expected N under H0
+        mmx_row <- which.min(out[, 4])   # min maximum N
+      }
+
+      r1_opt  <- out[opt_row, 1]; n1_opt <- out[opt_row, 2]
+      r_opt   <- out[opt_row, 3]; n_opt  <- out[opt_row, 4]
+      en0_opt <- out[opt_row, 5]
+
+      r1_mmx  <- out[mmx_row, 1]; n1_mmx <- out[mmx_row, 2]
+      r_mmx   <- out[mmx_row, 3]; n_mmx  <- out[mmx_row, 4]
+
+      plr           <- pwr / ep1
+      cv_ia_opt     <- r1_opt / n1_opt
+      cv_fa_opt     <- r_opt  / n_opt
+      cv_fa_mmx     <- r_mmx  / n_mmx
+      utility_opt   <- plr * (cv_fa_opt - pu)
+      utility_mmx   <- plr * (cv_fa_mmx - pu)
+      p_early_stop  <- pbinom(r1_opt, n1_opt, pu)
+
+      results[[j]] <- list(
+        power           = round(pwr * 100, 1),
+        r1              = as.integer(r1_opt),  n1    = as.integer(n1_opt),
+        r               = as.integer(r_opt),   n     = as.integer(n_opt),
+        cv_ia           = round(cv_ia_opt,    4),
+        cv_fa           = round(cv_fa_opt,    4),
+        en0             = round(en0_opt,      2),
+        p_early_stop    = round(p_early_stop, 4),
+        utility         = round(utility_opt,  4),
+        minimax_r1      = as.integer(r1_mmx),  minimax_n1  = as.integer(n1_mmx),
+        minimax_r       = as.integer(r_mmx),   minimax_n   = as.integer(n_mmx),
+        minimax_cv_ia   = round(r1_mmx / n1_mmx, 4),
+        minimax_cv_fa   = round(cv_fa_mmx,        4),
+        minimax_utility = round(utility_mmx,       4)
+      )
+    }, error = function(e) {
+      results[[j]] <<- NULL
+    })
+  }
+
+  results <- Filter(Negate(is.null), results)
+
+  if (length(results) == 0) {
+    return(list(
+      feasible = FALSE,
+      error    = "No feasible design found. Try increasing nmax or adjusting parameters."
+    ))
+  }
+
+  utilities <- sapply(results, `[[`, "utility")
+  opt_idx   <- which.max(utilities)
+
+  list(
+    feasible = TRUE,
+    results  = results,
+    optimal  = results[[opt_idx]]
   )
 }
 
