@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Roboto_Slab } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { NavBar } from "@/components/NavBar";
 import "./globals.css";
 
 const inter = Inter({
@@ -17,7 +18,7 @@ const robotoSlab = Roboto_Slab({
 
 export const metadata: Metadata = {
   title: "GS-Intersect",
-  description: "Optimal power selection for Group Sequential survival trial design",
+  description: "Optimal power selection for group sequential and Simon 2-stage trial design",
 };
 
 export default function RootLayout({
@@ -28,7 +29,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${robotoSlab.variable}`}>
       <body>
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>
+          <NavBar />
+          {children}
+        </TooltipProvider>
       </body>
     </html>
   );

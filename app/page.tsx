@@ -74,58 +74,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="border-b border-az-platinum bg-white/90 backdrop-blur sticky top-0 z-10 print-hidden">
-        <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
-              GS-Intersect
-            </h1>
-            <p className="text-xs text-az-platinum mt-0.5">
-              Optimal power selection for Group Sequential survival trial design
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {result && !loading && (
-              <>
-                <div className="relative">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleShare}
-                    className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    Share
-                  </Button>
-                  {shareToast && (
-                    <div className="absolute right-0 top-9 bg-az-graphite text-white text-xs rounded-md px-3 py-1.5 whitespace-nowrap shadow-lg animate-slide-in">
-                      Link copied!
-                    </div>
-                  )}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePrint}
-                  className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  Export PDF
-                </Button>
-              </>
-            )}
-            <div className="hidden sm:flex items-center gap-3">
-              <div className="h-8 w-px bg-az-light-platinum" />
-              <p className="text-xs font-medium text-az-graphite">AstraZeneca</p>
-              <div className="w-3 h-8 rounded-sm" style={{ background: "linear-gradient(180deg, #830051 0%, #003865 100%)" }} />
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Main content */}
-      <main className="flex-1 max-w-screen-2xl mx-auto w-full px-6 py-8">
+      <main className="flex-1 max-w-screen-2xl mx-auto w-full px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
 
           {/* Left: inputs */}
@@ -179,6 +129,35 @@ export default function Home() {
 
             {result && !loading && (
               <>
+                {/* Share / Print toolbar */}
+                <div className="flex justify-end items-center gap-3 print-hidden">
+                  <div className="relative">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleShare}
+                      className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      Share
+                    </Button>
+                    {shareToast && (
+                      <div className="absolute right-0 top-9 bg-az-graphite text-white text-xs rounded-md px-3 py-1.5 whitespace-nowrap shadow-lg animate-slide-in">
+                        Link copied!
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePrint}
+                    className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Export PDF
+                  </Button>
+                </div>
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between print-hidden">
                     <h2 className="text-sm font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
@@ -216,13 +195,6 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-az-light-platinum mt-auto bg-white print-hidden">
-        <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center justify-between text-xs text-az-platinum">
-          <span>GS-Intersect</span>
-          <span>Powered by gsDesign (R)</span>
-        </div>
-      </footer>
     </div>
   );
 }
