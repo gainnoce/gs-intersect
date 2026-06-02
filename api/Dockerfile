@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libtiff5-dev \
     libjpeg-dev \
+    libuv1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install all R packages from Posit Package Manager (pre-built Linux binaries)
