@@ -80,9 +80,13 @@ export function SimonChart({ results, optimal, inputs }: Props) {
       let last2 = -Infinity;
       for (const r of withOpt) {
         const isOpt = Math.abs(r.utility - optUtil) < 1e-9;
-        if (isOpt || r.utility - last2 >= minGap) {
-          regreedy.push(r);
-          last2 = r.utility;
+        if (isOpt) {
+          if (regreedy.length > 0 && r.utility - regreedy[regreedy.length - 1].utility < minGap) {
+            regreedy.pop();
+          }
+          regreedy.push(r); last2 = r.utility;
+        } else if (r.utility - last2 >= minGap) {
+          regreedy.push(r); last2 = r.utility;
         }
       }
       thinned = regreedy;

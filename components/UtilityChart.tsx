@@ -348,13 +348,14 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     utilExtractor?: (r: DesignResult) => number,
     powerLabel?: string,
     powerExtractor?: (r: DesignResult) => number,
+    pixelBudget = 20,
   ): Partial<Plotly.Layout> => {
     const getUtil  = utilExtractor  ?? ((r: DesignResult) => r[utilKey]);
     const getPower = powerExtractor ?? ((r: DesignResult) => r.power);
 
     // Greedy pixel-gap thinning — shared by yaxis (utility labels) and yaxis2 (power% labels)
     const ySpan  = yRange[1] - yRange[0];
-    const minGap = ySpan > 0 ? (20 * ySpan) / 214 : 0;
+    const minGap = ySpan > 0 ? (pixelBudget * ySpan) / 214 : 0;
     const optUtil = sortedRows.length > 0 ? Math.max(...sortedRows.map(r => getUtil(r))) : 0;
 
     const greedy: DesignResult[] = [];
@@ -373,7 +374,15 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
         let last2 = -Infinity;
         for (const r of withOpt) {
           const isOpt = Math.abs(getUtil(r) - optUtil) < 1e-9;
-          if (isOpt || getUtil(r) - last2 >= minGap) { regreedy.push(r); last2 = getUtil(r); }
+          if (isOpt) {
+            // Force-insert optimal: if the preceding entry is too close, drop it first
+            if (regreedy.length > 0 && getUtil(r) - getUtil(regreedy[regreedy.length - 1]) < minGap) {
+              regreedy.pop();
+            }
+            regreedy.push(r); last2 = getUtil(r);
+          } else if (getUtil(r) - last2 >= minGap) {
+            regreedy.push(r); last2 = getUtil(r);
+          }
         }
         thinned = regreedy;
       }
@@ -516,6 +525,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       (r) => r.ia_stages?.[j]?.utility ?? r.utility_IA,
       "IA Power %",
       (r) => r.ia_stages?.[j]?.power ?? r.power_IA ?? r.power,
+      14,
     );
     return { data, layout, jXRange, init, color };
   });
@@ -552,7 +562,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     },
   ];
 
-  const faLayout = singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", FA_COLOR, faYRange, faXRange, undefined, "FA Cumul. Power %");
+  const faLayout = singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", FA_COLOR, faYRange, faXRange, undefined, "FA Cumul. Power %", undefined, 22);
 
   // ── Overlay data ──────────────────────────────────────────────────────
   // Pre-compute non-overlapping label positions for all overlay stars
@@ -636,7 +646,12 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       let last2 = -Infinity;
       for (const r of withOpt) {
         const isOpt = Math.abs(r.utility_FA - optimal_FA.utility_FA) < 1e-9;
-        if (isOpt || r.utility_FA - last2 >= overlayMinGap) { regreedy.push(r); last2 = r.utility_FA; }
+        if (isOpt) {
+          if (regreedy.length > 0 && r.utility_FA - regreedy[regreedy.length - 1].utility_FA < overlayMinGap) {
+            regreedy.pop();
+          }
+          regreedy.push(r); last2 = r.utility_FA;
+        } else if (r.utility_FA - last2 >= overlayMinGap) { regreedy.push(r); last2 = r.utility_FA; }
       }
       overlayFAThinned = regreedy;
     }
