@@ -37,7 +37,7 @@ export function SimonOptimalCard({ optimal, inputs }: Props) {
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-4 space-y-4">
+          <CardContent className="space-y-3">
             <p className="text-sm text-az-graphite leading-snug">
               Stop early if{" "}
               <span className="font-bold text-indigo-600">≤ {optimal.r1}</span>{" "}
@@ -68,7 +68,7 @@ export function SimonOptimalCard({ optimal, inputs }: Props) {
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-4 space-y-4">
+          <CardContent className="space-y-3">
             <p className="text-sm text-az-graphite leading-snug">
               Declare promising if{" "}
               <span className="font-bold text-az-navy">&gt; {optimal.r}</span>{" "}
