@@ -22,10 +22,8 @@ function FieldLabel({ label, tooltip, error, htmlFor }: { label: string; tooltip
         {label}
       </Label>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button" aria-label={`Info: ${label}`}>
-            <Info className={`w-3 h-3 cursor-help ${error ? "text-red-400" : "text-az-platinum"}`} />
-          </button>
+        <TooltipTrigger aria-label={`Info: ${label}`}>
+          <Info className={`w-3 h-3 cursor-help ${error ? "text-red-400" : "text-az-platinum"}`} />
         </TooltipTrigger>
         <TooltipContent className="max-w-56 text-xs bg-az-graphite border-az-graphite text-white">
           {tooltip}
