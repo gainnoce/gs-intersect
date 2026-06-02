@@ -188,7 +188,7 @@ export default function Home() {
                   inputs={lastInputs!}
                   response={result}
                 />
-                <RawOutput response={result} inputs={lastInputs! as Record<string, unknown>} />
+                <RawOutput response={result} inputs={lastInputs!} />
               </>
             )}
           </div>

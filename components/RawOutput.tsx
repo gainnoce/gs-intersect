@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 interface Props {
   response: unknown;
-  inputs: Record<string, unknown>;
+  inputs: object;
 }
 
 export function RawOutput({ response, inputs }: Props) {

@@ -169,7 +169,7 @@ export default function SimonPage() {
 
                 <RawOutput
                   response={result}
-                  inputs={lastInputs! as Record<string, unknown>}
+                  inputs={lastInputs!}
                 />
               </>
             )}
