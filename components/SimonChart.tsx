@@ -157,6 +157,7 @@ export function SimonChart({ results, optimal, inputs }: Props) {
       ...baseAxis,
       title: { text: "Utility Score" },
       range: yRange,
+      tickmode: "array",
       tickvals: thinned.map(r => r.utility),
       ticktext: thinned.map(r => r.utility.toFixed(4)),
     },
