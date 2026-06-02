@@ -37,11 +37,20 @@ export function SimonOptimalCard({ optimal, inputs }: Props) {
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4 pt-4">
-            <StatItem label="Stop if ≤ r₁ responses" value={optimal.r1} />
-            <StatItem label="Interim N"               value={optimal.n1} />
-            <StatItem label="Critical Value (CV₁)"    value={optimal.cv_ia.toFixed(4)} />
-            <StatItem label="P(stop early | H₀)"      value={`${(optimal.p_early_stop * 100).toFixed(1)}%`} />
+          <CardContent className="pt-4 space-y-4">
+            <p className="text-sm text-az-graphite leading-snug">
+              Stop early if{" "}
+              <span className="font-bold text-indigo-600">≤ {optimal.r1}</span>{" "}
+              responses in{" "}
+              <span className="font-bold text-indigo-600">{optimal.n1}</span>{" "}
+              patients
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <StatItem label="Stop if ≤ r₁ responses" value={optimal.r1} />
+              <StatItem label="Interim N"               value={optimal.n1} />
+              <StatItem label="Critical Value (CV₁)"    value={optimal.cv_ia.toFixed(4)} />
+              <StatItem label="P(stop early | H₀)"      value={`${(optimal.p_early_stop * 100).toFixed(1)}%`} />
+            </div>
           </CardContent>
         </Card>
 
@@ -59,13 +68,22 @@ export function SimonOptimalCard({ optimal, inputs }: Props) {
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4 pt-4">
-            <StatItem label="Total N"        value={optimal.n} />
-            <StatItem label="Declare if > r" value={optimal.r} />
-            <StatItem label="Critical Value" value={optimal.cv_fa.toFixed(4)} />
-            <StatItem label="EN₀"            value={optimal.en0.toFixed(1)} />
-            <StatItem label="Utility Score"  value={optimal.utility.toFixed(4)} />
-            <StatItem label="α"              value={inputs.ep1} />
+          <CardContent className="pt-4 space-y-4">
+            <p className="text-sm text-az-graphite leading-snug">
+              Declare promising if{" "}
+              <span className="font-bold text-az-navy">&gt; {optimal.r}</span>{" "}
+              responses in{" "}
+              <span className="font-bold text-az-navy">{optimal.n}</span>{" "}
+              patients
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <StatItem label="Total N"        value={optimal.n} />
+              <StatItem label="Declare if > r" value={optimal.r} />
+              <StatItem label="Critical Value" value={optimal.cv_fa.toFixed(4)} />
+              <StatItem label="EN₀"            value={optimal.en0.toFixed(1)} />
+              <StatItem label="Utility Score"  value={optimal.utility.toFixed(4)} />
+              <StatItem label="α"              value={inputs.ep1} />
+            </div>
           </CardContent>
         </Card>
       </div>
