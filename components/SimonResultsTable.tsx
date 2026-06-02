@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { exportSimonRScript, exportSimonCSV } from "@/lib/api";
@@ -11,7 +13,8 @@ interface Props {
 }
 
 export function SimonResultsTable({ results, optimal, inputs }: Props) {
-  const isOptimal = (r: SimonResult) => r.power === optimal.power && r.n === optimal.n;
+  const isOptimal = (r: SimonResult) =>
+    r.power === optimal.power && r.n === optimal.n && r.r === optimal.r && r.n1 === optimal.n1;
 
   const sorted = [...results].sort((a, b) => a.power - b.power);
 

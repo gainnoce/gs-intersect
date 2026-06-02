@@ -76,10 +76,16 @@ export function SimonChart({ results, optimal, inputs }: Props) {
     const optRow = sortedByUtil.find(r => Math.abs(r.utility - optUtil) < 1e-9);
     if (optRow) {
       const withOpt = [...greedy, optRow].sort((a, b) => a.utility - b.utility);
-      thinned = withOpt.filter(r => {
+      const regreedy: SimonResult[] = [];
+      let last2 = -Infinity;
+      for (const r of withOpt) {
         const isOpt = Math.abs(r.utility - optUtil) < 1e-9;
-        return isOpt || Math.abs(r.utility - optUtil) >= minGap;
-      });
+        if (isOpt || r.utility - last2 >= minGap) {
+          regreedy.push(r);
+          last2 = r.utility;
+        }
+      }
+      thinned = regreedy;
     }
   }
 
