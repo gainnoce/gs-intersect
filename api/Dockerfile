@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
 # Install all R packages from Posit Package Manager (pre-built Linux binaries)
 RUN R -e "\
   options(repos = c(CRAN = 'https://packagemanager.posit.co/cran/__linux__/jammy/latest')); \
-  install.packages(c('plumber', 'gsDesign', 'jsonlite'), dependencies = TRUE) \
+  install.packages(c('plumber', 'gsDesign', 'jsonlite', 'clinfun'), dependencies = TRUE) \
 "
 
 WORKDIR /app
