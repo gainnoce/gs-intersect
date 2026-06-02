@@ -562,7 +562,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     },
   ];
 
-  const faLayout = singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", FA_COLOR, faYRange, faXRange, undefined, "FA Cumul. Power %", undefined, 22);
+  const faLayout = singleLayout(faInit.vals, faInit.labels, sortedFA, "utility_FA", FA_COLOR, faYRange, faXRange, undefined, "FA Cumul. Power %", undefined, 16);
 
   // ── Overlay data ──────────────────────────────────────────────────────
   // Pre-compute non-overlapping label positions for all overlay stars
@@ -616,7 +616,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   // Overlay y-axes: combined thinning for left axis (all curves), FA-only for right axis (power%)
   // Overlay chart: 460px height - 112 top - 52 bottom = 296px plot area; 22px per label budget.
   const overlayYSpan  = yRangeAll[1] - yRangeAll[0];
-  const overlayMinGap = overlayYSpan > 0 ? (22 * overlayYSpan) / 296 : 0;
+  const overlayMinGap = overlayYSpan > 0 ? (16 * overlayYSpan) / 296 : 0;
 
   // Left yaxis — greedy-thin across ALL IA + FA utility values so ticks align with every curve
   const allOverlayUtils = [
