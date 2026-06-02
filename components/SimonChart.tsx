@@ -63,7 +63,7 @@ export function SimonChart({ results, optimal, inputs }: Props) {
   // then force-include the optimal point.
   const sortedByUtil = [...sorted].sort((a, b) => a.utility - b.utility);
   const ySpan  = yRange[1] - yRange[0];
-  const minGap = ySpan > 0 ? (14 * ySpan) / 214 : 0;
+  const minGap = ySpan > 0 ? (20 * ySpan) / 214 : 0;
   const optUtil = optimal.utility;
 
   const greedy: SimonResult[] = [];
@@ -159,7 +159,7 @@ export function SimonChart({ results, optimal, inputs }: Props) {
       range: yRange,
       tickmode: "array",
       tickvals: thinned.map(r => r.utility),
-      ticktext: thinned.map(r => r.utility.toFixed(4)),
+      ticktext: thinned.map(r => r.utility.toFixed(3)),
     },
     yaxis2: {
       overlaying: "y", side: "right",

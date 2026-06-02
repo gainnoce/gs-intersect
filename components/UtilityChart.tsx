@@ -354,7 +354,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
 
     // Greedy pixel-gap thinning — shared by yaxis (utility labels) and yaxis2 (power% labels)
     const ySpan  = yRange[1] - yRange[0];
-    const minGap = ySpan > 0 ? (14 * ySpan) / 214 : 0;
+    const minGap = ySpan > 0 ? (20 * ySpan) / 214 : 0;
     const optUtil = sortedRows.length > 0 ? Math.max(...sortedRows.map(r => getUtil(r))) : 0;
 
     const greedy: DesignResult[] = [];
@@ -406,7 +406,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
         range: yRange,
         tickmode: "array",
         tickvals: thinned.map(r => getUtil(r)),
-        ticktext: thinned.map(r => getUtil(r).toFixed(4)),
+        ticktext: thinned.map(r => getUtil(r).toFixed(3)),
       } as Partial<Plotly.LayoutAxis>,
       yaxis2: {
         overlaying: "y", side: "right",
@@ -603,29 +603,42 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     })() : []),
   ];
 
-  // Greedy thinning for overlay y-axes (FA utilities; yRangeAll span for correct pixel gap)
+  // Overlay y-axes: combined thinning for left axis (all curves), FA-only for right axis (power%)
+  // Overlay chart: 460px height - 112 top - 52 bottom = 296px plot area; 22px per label budget.
   const overlayYSpan  = yRangeAll[1] - yRangeAll[0];
-  const overlayMinGap = overlayYSpan > 0 ? (14 * overlayYSpan) / 214 : 0;
-  const overlayOptUtil = optimal_FA.utility_FA;
+  const overlayMinGap = overlayYSpan > 0 ? (22 * overlayYSpan) / 296 : 0;
 
-  const overlayGreedy: DesignResult[] = [];
-  let oLastU = -Infinity;
-  for (const r of sortedFA) {
-    if (r.utility_FA - oLastU >= overlayMinGap) { overlayGreedy.push(r); oLastU = r.utility_FA; }
+  // Left yaxis — greedy-thin across ALL IA + FA utility values so ticks align with every curve
+  const allOverlayUtils = [
+    ...stagesData.flatMap(st => st.utils),
+    ...utilFA,
+  ].sort((a, b) => a - b).filter((v, i, arr) => i === 0 || Math.abs(v - arr[i - 1]) > 1e-9);
+
+  const overlayAllGreedy: number[] = [];
+  let oAllLast = -Infinity;
+  for (const u of allOverlayUtils) {
+    if (u - oAllLast >= overlayMinGap) { overlayAllGreedy.push(u); oAllLast = u; }
   }
 
-  let overlayThinned = overlayGreedy;
-  if (!overlayGreedy.some(r => Math.abs(r.utility_FA - overlayOptUtil) < 1e-9)) {
-    const optRow = sortedFA.find(r => Math.abs(r.utility_FA - overlayOptUtil) < 1e-9);
+  // Right yaxis2 — greedy-thin FA only (need DesignResult for power% labels)
+  const overlayFAGreedy: DesignResult[] = [];
+  let oFALast = -Infinity;
+  for (const r of sortedFA) {
+    if (r.utility_FA - oFALast >= overlayMinGap) { overlayFAGreedy.push(r); oFALast = r.utility_FA; }
+  }
+
+  let overlayFAThinned = overlayFAGreedy;
+  if (!overlayFAGreedy.some(r => Math.abs(r.utility_FA - optimal_FA.utility_FA) < 1e-9)) {
+    const optRow = sortedFA.find(r => Math.abs(r.utility_FA - optimal_FA.utility_FA) < 1e-9);
     if (optRow) {
-      const withOpt = [...overlayGreedy, optRow].sort((a, b) => a.utility_FA - b.utility_FA);
+      const withOpt = [...overlayFAGreedy, optRow].sort((a, b) => a.utility_FA - b.utility_FA);
       const regreedy: DesignResult[] = [];
       let last2 = -Infinity;
       for (const r of withOpt) {
-        const isOpt = Math.abs(r.utility_FA - overlayOptUtil) < 1e-9;
+        const isOpt = Math.abs(r.utility_FA - optimal_FA.utility_FA) < 1e-9;
         if (isOpt || r.utility_FA - last2 >= overlayMinGap) { regreedy.push(r); last2 = r.utility_FA; }
       }
-      overlayThinned = regreedy;
+      overlayFAThinned = regreedy;
     }
   }
 
@@ -639,8 +652,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             type: "linear" as const,
             range: yRangeAll,
             tickmode: "array" as const,
-            tickvals: overlayThinned.map(r => r.utility_FA),
-            ticktext: overlayThinned.map(r => r.utility_FA.toFixed(4)),
+            tickvals: overlayAllGreedy,
+            ticktext: overlayAllGreedy.map(u => u.toFixed(3)),
           }),
     };
     const base: Partial<Plotly.Layout> = {
@@ -655,8 +668,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       yaxis2: {
         overlaying: "y", side: "right",
         tickmode: "array",
-        tickvals: overlayThinned.map(r => r.utility_FA),
-        ticktext: overlayThinned.map(r => `${r.power}%`),
+        tickvals: overlayFAThinned.map(r => r.utility_FA),
+        ticktext: overlayFAThinned.map(r => `${r.power}%`),
         tickfont: { color: FA_COLOR, size: 9 },
         title: { text: "Power % (FA)", font: { color: FA_COLOR, size: 10 } },
         showgrid: false, zeroline: false,
