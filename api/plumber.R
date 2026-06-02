@@ -1,6 +1,5 @@
 library(plumber)
 library(gsDesign)
-library(clinfun)
 
 #* @apiTitle GS-Intersect API
 #* @apiDescription Utility optimization for Group Sequential survival trial design
@@ -181,7 +180,7 @@ function(req) {
     pwr <- 1 - ep2
 
     tryCatch({
-      out <- ph2simon(pu, pa, ep1, ep2, nmax)$out
+      out <- clinfun::ph2simon(pu, pa, ep1, ep2, nmax)$out
 
       # Identify rows: optimal = min EN(p0) col 5; minimax = min n col 4.
       # When both designs are identical, ph2simon returns 1 row.
