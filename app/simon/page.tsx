@@ -5,6 +5,7 @@ import { SimonInputPanel }   from "@/components/SimonInputPanel";
 import { SimonChart }        from "@/components/SimonChart";
 import { SimonOptimalCard }  from "@/components/SimonOptimalCard";
 import { SimonResultsTable } from "@/components/SimonResultsTable";
+import { RawOutput } from "@/components/RawOutput";
 import { runSimon, simonInputsToParams, simonParamsToInputs } from "@/lib/api";
 import type { SimonInputs, SimonResponse } from "@/lib/api";
 import { AlertCircle, Share2, Printer } from "lucide-react";
@@ -164,6 +165,11 @@ export default function SimonPage() {
                   results={result.results}
                   optimal={result.optimal}
                   inputs={lastInputs!}
+                />
+
+                <RawOutput
+                  response={result}
+                  inputs={lastInputs! as Record<string, unknown>}
                 />
               </>
             )}

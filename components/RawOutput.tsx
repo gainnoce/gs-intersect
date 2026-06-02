@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import type { OptimizeResponse, DesignInputs } from "@/lib/api";
-
 interface Props {
-  response: OptimizeResponse;
-  inputs: DesignInputs;
+  response: unknown;
+  inputs: Record<string, unknown>;
 }
 
 export function RawOutput({ response, inputs }: Props) {
