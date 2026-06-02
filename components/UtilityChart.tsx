@@ -351,6 +351,34 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   ): Partial<Plotly.Layout> => {
     const getUtil  = utilExtractor  ?? ((r: DesignResult) => r[utilKey]);
     const getPower = powerExtractor ?? ((r: DesignResult) => r.power);
+
+    // Greedy pixel-gap thinning — shared by yaxis (utility labels) and yaxis2 (power% labels)
+    const ySpan  = yRange[1] - yRange[0];
+    const minGap = ySpan > 0 ? (14 * ySpan) / 214 : 0;
+    const optUtil = sortedRows.length > 0 ? Math.max(...sortedRows.map(r => getUtil(r))) : 0;
+
+    const greedy: DesignResult[] = [];
+    let lastU = -Infinity;
+    for (const r of sortedRows) {
+      const u = getUtil(r);
+      if (u - lastU >= minGap) { greedy.push(r); lastU = u; }
+    }
+
+    let thinned = greedy;
+    if (!greedy.some(r => Math.abs(getUtil(r) - optUtil) < 1e-9)) {
+      const optRow = sortedRows.find(r => Math.abs(getUtil(r) - optUtil) < 1e-9);
+      if (optRow) {
+        const withOpt = [...greedy, optRow].sort((a, b) => getUtil(a) - getUtil(b));
+        const regreedy: DesignResult[] = [];
+        let last2 = -Infinity;
+        for (const r of withOpt) {
+          const isOpt = Math.abs(getUtil(r) - optUtil) < 1e-9;
+          if (isOpt || getUtil(r) - last2 >= minGap) { regreedy.push(r); last2 = getUtil(r); }
+        }
+        thinned = regreedy;
+      }
+    }
+
     return {
       paper_bgcolor: "transparent",
       plot_bgcolor:  "#f8faf9",
@@ -376,47 +404,21 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
         ...baseAxis,
         title: { text: "Utility Score" },
         range: yRange,
+        tickmode: "array",
+        tickvals: thinned.map(r => getUtil(r)),
+        ticktext: thinned.map(r => getUtil(r).toFixed(4)),
       } as Partial<Plotly.LayoutAxis>,
-      yaxis2: (() => {
-        // Guarantee no two labels overlap by enforcing a minimum utility gap.
-        // Plot area height ≈ 214 px; 14 px per label (font 9 + padding).
-        const ySpan = yRange[1] - yRange[0];
-        const minGap = ySpan > 0 ? (14 * ySpan) / 214 : 0;
-        const optUtil = sortedRows.length > 0 ? Math.max(...sortedRows.map(r => getUtil(r))) : 0;
-
-        // Greedy forward pass (sortedRows is ascending by utility)
-        const greedy: DesignResult[] = [];
-        let lastU = -Infinity;
-        for (const r of sortedRows) {
-          const u = getUtil(r);
-          if (u - lastU >= minGap) { greedy.push(r); lastU = u; }
-        }
-
-        // Force-include optimal if the greedy pass skipped it, then drop any
-        // neighbours that are now within minGap of it.
-        let thinned = greedy;
-        if (!greedy.some(r => Math.abs(getUtil(r) - optUtil) < 1e-9)) {
-          const optRow = sortedRows.find(r => Math.abs(getUtil(r) - optUtil) < 1e-9);
-          if (optRow) {
-            const withOpt = [...greedy, optRow].sort((a, b) => getUtil(a) - getUtil(b));
-            thinned = withOpt.filter(r => {
-              const isOpt = Math.abs(getUtil(r) - optUtil) < 1e-9;
-              return isOpt || Math.abs(getUtil(r) - optUtil) >= minGap;
-            });
-          }
-        }
-
-        return {
-          overlaying: "y", side: "right",
-          range: yRange,
-          tickvals: thinned.map(r => getUtil(r)),
-          ticktext: thinned.map(r => `${getPower(r).toFixed(1)}%`),
-          tickfont: { color: accentColor, size: 9 },
-          title: { text: powerLabel ?? "Power %", font: { color: accentColor, size: 10 } },
-          showgrid: false, zeroline: false,
-          showline: true, linecolor: accentColor, ticks: "outside",
-        } as Partial<Plotly.LayoutAxis>;
-      })(),
+      yaxis2: {
+        overlaying: "y", side: "right",
+        range: yRange,
+        tickmode: "array",
+        tickvals: thinned.map(r => getUtil(r)),
+        ticktext: thinned.map(r => `${getPower(r).toFixed(1)}%`),
+        tickfont: { color: accentColor, size: 9 },
+        title: { text: powerLabel ?? "Power %", font: { color: accentColor, size: 10 } },
+        showgrid: false, zeroline: false,
+        showline: true, linecolor: accentColor, ticks: "outside",
+      } as Partial<Plotly.LayoutAxis>,
     };
   };
 
@@ -601,13 +603,45 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     })() : []),
   ];
 
+  // Greedy thinning for overlay y-axes (FA utilities; yRangeAll span for correct pixel gap)
+  const overlayYSpan  = yRangeAll[1] - yRangeAll[0];
+  const overlayMinGap = overlayYSpan > 0 ? (14 * overlayYSpan) / 214 : 0;
+  const overlayOptUtil = optimal_FA.utility_FA;
+
+  const overlayGreedy: DesignResult[] = [];
+  let oLastU = -Infinity;
+  for (const r of sortedFA) {
+    if (r.utility_FA - oLastU >= overlayMinGap) { overlayGreedy.push(r); oLastU = r.utility_FA; }
+  }
+
+  let overlayThinned = overlayGreedy;
+  if (!overlayGreedy.some(r => Math.abs(r.utility_FA - overlayOptUtil) < 1e-9)) {
+    const optRow = sortedFA.find(r => Math.abs(r.utility_FA - overlayOptUtil) < 1e-9);
+    if (optRow) {
+      const withOpt = [...overlayGreedy, optRow].sort((a, b) => a.utility_FA - b.utility_FA);
+      const regreedy: DesignResult[] = [];
+      let last2 = -Infinity;
+      for (const r of withOpt) {
+        const isOpt = Math.abs(r.utility_FA - overlayOptUtil) < 1e-9;
+        if (isOpt || r.utility_FA - last2 >= overlayMinGap) { regreedy.push(r); last2 = r.utility_FA; }
+      }
+      overlayThinned = regreedy;
+    }
+  }
+
   const overlayLayout: Partial<Plotly.Layout> = (() => {
     const yAxisConfig: Partial<Plotly.LayoutAxis> = {
       ...baseAxis,
       title: { text: "Utility Score" },
       ...(logScale
         ? { type: "log" as const }
-        : { type: "linear" as const, range: yRangeAll }),
+        : {
+            type: "linear" as const,
+            range: yRangeAll,
+            tickmode: "array" as const,
+            tickvals: overlayThinned.map(r => r.utility_FA),
+            ticktext: overlayThinned.map(r => r.utility_FA.toFixed(4)),
+          }),
     };
     const base: Partial<Plotly.Layout> = {
       paper_bgcolor: "transparent",
@@ -620,8 +654,9 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       yaxis: yAxisConfig,
       yaxis2: {
         overlaying: "y", side: "right",
-        tickvals: sortedFA.map(r => r.utility_FA),
-        ticktext: sortedFA.map(r => `${r.power}%`),
+        tickmode: "array",
+        tickvals: overlayThinned.map(r => r.utility_FA),
+        ticktext: overlayThinned.map(r => `${r.power}%`),
         tickfont: { color: FA_COLOR, size: 9 },
         title: { text: "Power % (FA)", font: { color: FA_COLOR, size: 10 } },
         showgrid: false, zeroline: false,
