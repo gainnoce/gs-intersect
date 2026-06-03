@@ -19,18 +19,19 @@ export function LoadingProgress({ phase, powerLevels, estimatedComputeMs }: Prop
     return () => clearInterval(id);
   }, [phase]);
 
-  // Smooth progress bar during computing phase (fills to 90% over estimatedComputeMs)
+  // Smooth progress bar during computing phase — asymptotic curve so the bar
+  // always moves and never plateaus while waiting for the response.
+  // tau=25s → ~33% at 10s, ~70% at 30s, ~86% at 50s.
   useEffect(() => {
     if (phase !== "computing") { if (phase === "processing") setProgress(100); return; }
     setProgress(0);
     const start = Date.now();
     const id = setInterval(() => {
-      const t   = Math.min((Date.now() - start) / estimatedComputeMs, 1);
-      const val = (1 - Math.pow(1 - t, 2)) * 90;   // ease-out quad, caps at 90
-      setProgress(val);
+      const elapsed = Date.now() - start;
+      setProgress(88 * (1 - Math.exp(-elapsed / 25000)));
     }, 80);
     return () => clearInterval(id);
-  }, [phase, estimatedComputeMs]);
+  }, [phase]);
 
   if (phase === "connecting") {
     return (
