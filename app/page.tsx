@@ -6,6 +6,7 @@ import { UtilityChart } from "@/components/UtilityChart";
 import { OptimalCard } from "@/components/OptimalCard";
 import { ResultsTable } from "@/components/ResultsTable";
 import { RawOutput } from "@/components/RawOutput";
+import { LoadingProgress } from "@/components/LoadingProgress";
 import { runOptimization, inputsToParams, paramsToInputs } from "@/lib/api";
 import type { DesignInputs, OptimizeResponse } from "@/lib/api";
 import { AlertCircle, Share2, Printer } from "lucide-react";
@@ -15,6 +16,7 @@ export default function Home() {
   const [result,      setResult]      = useState<OptimizeResponse | null>(null);
   const [lastInputs,  setLastInputs]  = useState<DesignInputs | null>(null);
   const [loading,     setLoading]     = useState(false);
+  const [phase,       setPhase]       = useState<"connecting" | "computing" | "processing">("connecting");
   const [error,       setError]       = useState<string | null>(null);
   const [urlInputs,   setUrlInputs]   = useState<Partial<DesignInputs> | undefined>(undefined);
   const [shareToast,  setShareToast]  = useState(false);
@@ -39,16 +41,28 @@ export default function Home() {
 
   const handleRun = async (inputs: DesignInputs) => {
     setLoading(true);
+    setPhase("connecting");
     setError(null);
+
+    let resolved = false;
+    const computingTimer = setTimeout(() => {
+      if (!resolved) setPhase("computing");
+    }, 3000);
+
     try {
       const data = await runOptimization(inputs);
+      resolved = true;
+      clearTimeout(computingTimer);
+      setPhase("processing");
+      await new Promise(r => setTimeout(r, 500));
       setResult(data);
       setLastInputs(inputs);
     } catch (e) {
+      resolved = true;
+      clearTimeout(computingTimer);
       const raw     = e instanceof Error ? e.message : "Unknown error";
       const isNet   = /failed to fetch|network|load failed/i.test(raw);
       const debugId = `ERR-${Date.now().toString(36).toUpperCase()}`;
-      // Debug code printed to console for support purposes
       console.error(`[GS-Intersect ${debugId}]`, e);
       setError(
         isNet
@@ -102,19 +116,11 @@ export default function Home() {
             )}
 
             {loading && (
-              <div className="flex flex-col items-center justify-center h-96 rounded-xl border border-az-light-platinum bg-white print-hidden">
-                <div className="flex gap-1.5 mb-4">
-                  {[0, 1, 2].map((i) => (
-                    <div
-                      key={i}
-                      className="w-2.5 h-2.5 rounded-full bg-az-mulberry animate-bounce"
-                      style={{ animationDelay: `${i * 0.15}s` }}
-                    />
-                  ))}
-                </div>
-                <p className="text-az-graphite text-sm font-medium">Running optimization…</p>
-                <p className="text-az-platinum text-xs mt-1">This may take a few seconds</p>
-              </div>
+              <LoadingProgress
+                phase={phase}
+                powerLevels={11}
+                estimatedComputeMs={10000}
+              />
             )}
 
             {error && (

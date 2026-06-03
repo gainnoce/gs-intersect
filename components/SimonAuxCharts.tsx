@@ -80,6 +80,12 @@ export function SimonAuxCharts({ results, inputs }: Props) {
     const leftThinned  = greedyThin(sortedRows, r => r.y, yRange, 18);
     const rightThinned = greedyThin(sortedRows, r => r.y, yRange, 20);
 
+    // Thin the top CV axis to ~8-10 ticks max to avoid overlap
+    const cvStride    = Math.max(1, Math.ceil(ns.length / 9));
+    const thinnedNs   = ns.filter((_, i) => i % cvStride === 0);
+    const labelMap    = new Map(ns.map((n, i) => [n, cvLabels[i]]));
+    const thinnedCvTx = thinnedNs.map(n => labelMap.get(n) ?? "");
+
     return {
       paper_bgcolor: "transparent",
       plot_bgcolor:  "#f8faf9",
@@ -94,7 +100,7 @@ export function SimonAuxCharts({ results, inputs }: Props) {
       } as Partial<Plotly.LayoutAxis>,
       xaxis2: {
         overlaying: "x", side: "top", matches: "x",
-        tickvals:  ns, ticktext: cvLabels,
+        tickvals:  thinnedNs, ticktext: thinnedCvTx,
         tickangle: -45,
         tickfont:  { color: CURVE_COLOR, size: 9 },
         title: { text: "FA ORR% CV", font: { color: CURVE_COLOR, size: 10 } },

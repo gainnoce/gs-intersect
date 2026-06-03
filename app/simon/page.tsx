@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import { SimonInputPanel }   from "@/components/SimonInputPanel";
 import { SimonChart }        from "@/components/SimonChart";
-import { SimonOptimalCard }  from "@/components/SimonOptimalCard";
 import { SimonAuxCharts }    from "@/components/SimonAuxCharts";
+import { SimonOptimalCard }  from "@/components/SimonOptimalCard";
 import { SimonResultsTable } from "@/components/SimonResultsTable";
-import { RawOutput } from "@/components/RawOutput";
+import { RawOutput }         from "@/components/RawOutput";
+import { LoadingProgress }   from "@/components/LoadingProgress";
 import { runSimon, simonInputsToParams, simonParamsToInputs } from "@/lib/api";
 import type { SimonInputs, SimonResponse } from "@/lib/api";
 import { AlertCircle, Share2, Printer } from "lucide-react";
@@ -16,6 +17,7 @@ export default function SimonPage() {
   const [result,     setResult]     = useState<SimonResponse | null>(null);
   const [lastInputs, setLastInputs] = useState<SimonInputs | null>(null);
   const [loading,    setLoading]    = useState(false);
+  const [phase,      setPhase]      = useState<"connecting" | "computing" | "processing">("connecting");
   const [error,      setError]      = useState<string | null>(null);
   const [urlInputs,  setUrlInputs]  = useState<Partial<SimonInputs> | undefined>(undefined);
   const [shareToast, setShareToast] = useState(false);
@@ -36,12 +38,25 @@ export default function SimonPage() {
 
   const handleRun = async (inputs: SimonInputs) => {
     setLoading(true);
+    setPhase("connecting");
     setError(null);
+
+    let resolved = false;
+    const computingTimer = setTimeout(() => {
+      if (!resolved) setPhase("computing");
+    }, 3000);
+
     try {
       const data = await runSimon(inputs);
+      resolved = true;
+      clearTimeout(computingTimer);
+      setPhase("processing");
+      await new Promise(r => setTimeout(r, 500));
       setResult(data);
       setLastInputs(inputs);
     } catch (e) {
+      resolved = true;
+      clearTimeout(computingTimer);
       const raw   = e instanceof Error ? e.message : "Unknown error";
       const isNet = /failed to fetch|network|load failed/i.test(raw);
       const debugId = `ERR-${Date.now().toString(36).toUpperCase()}`;
@@ -97,19 +112,11 @@ export default function SimonPage() {
             )}
 
             {loading && (
-              <div className="flex flex-col items-center justify-center h-96 rounded-xl border border-az-light-platinum bg-white print-hidden">
-                <div className="flex gap-1.5 mb-4">
-                  {[0, 1, 2].map(i => (
-                    <div
-                      key={i}
-                      className="w-2.5 h-2.5 rounded-full bg-az-mulberry animate-bounce"
-                      style={{ animationDelay: `${i * 0.15}s` }}
-                    />
-                  ))}
-                </div>
-                <p className="text-az-graphite text-sm font-medium">Running optimization…</p>
-                <p className="text-az-platinum text-xs mt-1">This may take a few seconds</p>
-              </div>
+              <LoadingProgress
+                phase={phase}
+                powerLevels={43}
+                estimatedComputeMs={8000}
+              />
             )}
 
             {error && (
