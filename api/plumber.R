@@ -105,6 +105,7 @@ function(req) {
           cv       = round(cv_j, 4),
           utility  = round(utility_j, 4),
           fp       = round(fp_j, 6),
+          alpha    = round(calpha_j, 6),
           power    = round(cpwr_j * 100, 1),
           r01m     = round(r01m_j, 4),
           maturity = maturity_j
@@ -126,6 +127,8 @@ function(req) {
         cv_FA      = fa_stage$cv,
         utility_IA = ia_stages[[1]]$utility,
         utility_FA = fa_stage$utility,
+        alpha_IA   = ia_stages[[1]]$alpha,
+        alpha_FA   = fa_stage$alpha,
         ia_stages  = ia_stages   # full per-stage breakdown
       )
     }, error = function(e) {

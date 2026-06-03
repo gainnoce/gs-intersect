@@ -171,12 +171,13 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     const optPow       = opt.power;
     // IA-specific cumulative power (may differ from optPow which is the FA target)
     const optIAPow     = opt.ia_stages?.[j]?.power ?? opt.power_IA ?? opt.power;
+    const optIAAlpha   = opt.ia_stages?.[j]?.alpha ?? opt.alpha_IA;
     // Events at this IA stage under the FA-optimal design — pinned as cross-reference tick
     const faOptEvAtStage = optimal_FA.ia_stages?.[j]?.events ?? optimal_FA.events_IA;
     const sorted = [...results].sort((a, b) =>
       (a.ia_stages?.[j]?.utility ?? a.utility_IA) - (b.ia_stages?.[j]?.utility ?? b.utility_IA)
     );
-    return { events, utils, cvs, opt, optEv, optUt, optCv, optPow, optIAPow, faOptEvAtStage, sorted };
+    return { events, utils, cvs, opt, optEv, optUt, optCv, optPow, optIAPow, optIAAlpha, faOptEvAtStage, sorted };
   });
 
   const eventsFA  = results.map(r => r.events_FA);
@@ -787,6 +788,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             )}
             <span className="text-[10px] text-az-platinum whitespace-nowrap ml-auto">
               Optimal: {iaSt.optIAPow}% IA power · CV {iaSt.optCv}
+              {iaSt.optIAAlpha != null && ` · α spent ${iaSt.optIAAlpha.toFixed(4)}`}
             </span>
           </div>
 
@@ -893,6 +895,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
             </h3>
             <span className="text-[10px] text-az-platinum ml-auto whitespace-nowrap">
               Optimal: {optimal_FA.power}% power · CV {optimal_FA.cv_FA.toFixed(3)}
+              {optimal_FA.alpha_FA != null && ` · α spent ${optimal_FA.alpha_FA.toFixed(4)}`}
             </span>
           </div>
           {mounted && (

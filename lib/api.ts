@@ -3,6 +3,7 @@ export interface IAStageResult {
   cv: number;
   utility: number;
   fp: number;
+  alpha?: number;      // cumulative two-sided alpha spend at this analysis
   power: number;       // cumulative power at this stage (IA-specific)
   r01m?: number;       // LR(-) ratio: (1 - alpha_spent) / (1 - cumulative_power)
   maturity?: number;   // events / N total
@@ -32,6 +33,8 @@ export interface DesignResult {
   cv_FA: number;
   utility_IA: number;
   utility_FA: number;
+  alpha_IA?: number;   // cumulative two-sided alpha spend at IA stage 1
+  alpha_FA?: number;   // cumulative two-sided alpha spend at FA
   ia_stages?: IAStageResult[];
 }
 
@@ -99,6 +102,7 @@ export async function runOptimization(inputs: DesignInputs): Promise<OptimizeRes
     cv:       Number(s.cv),
     utility:  Number(s.utility),
     fp:       Number(s.fp),
+    alpha:    s.alpha    != null ? Number(s.alpha)    : undefined,
     power:    Number(s.power),
     r01m:     s.r01m    != null ? Number(s.r01m)    : undefined,
     maturity: s.maturity != null ? Number(s.maturity) : undefined,
@@ -114,6 +118,8 @@ export async function runOptimization(inputs: DesignInputs): Promise<OptimizeRes
     cv_FA:      Number(r.cv_FA),
     utility_IA: Number(r.utility_IA),
     utility_FA: Number(r.utility_FA),
+    alpha_IA:   r.alpha_IA != null ? Number(r.alpha_IA) : undefined,
+    alpha_FA:   r.alpha_FA != null ? Number(r.alpha_FA) : undefined,
     ia_stages:  Array.isArray(r.ia_stages)
       ? (r.ia_stages as Record<string, unknown>[]).map(coerceStage)
       : undefined,
