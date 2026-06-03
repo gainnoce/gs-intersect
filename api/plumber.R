@@ -173,7 +173,7 @@ function(req) {
   ep1  <- as.numeric(body$ep1  %||% 0.10)
   nmax <- as.integer(body$nmax %||% 150)
 
-  ep2_seq <- c(0.01, seq(0.05, 0.95, 0.05), 0.99)   # 21 power levels
+  ep2_seq <- c(0.01, 0.05, seq(0.1, 0.5, 0.01))   # 43 power levels matching Fabio's sweep
   lep2 <- length(ep2_seq)
 
   results <- vector("list", lep2)

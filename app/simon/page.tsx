@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { SimonInputPanel }   from "@/components/SimonInputPanel";
 import { SimonChart }        from "@/components/SimonChart";
 import { SimonOptimalCard }  from "@/components/SimonOptimalCard";
+import { SimonAuxCharts }    from "@/components/SimonAuxCharts";
 import { SimonResultsTable } from "@/components/SimonResultsTable";
 import { RawOutput } from "@/components/RawOutput";
 import { runSimon, simonInputsToParams, simonParamsToInputs } from "@/lib/api";
@@ -158,6 +159,8 @@ export default function SimonPage() {
                   </div>
                   <SimonChart results={result.results} optimal={result.optimal} inputs={lastInputs!} />
                 </div>
+
+                <SimonAuxCharts results={result.results} inputs={lastInputs!} />
 
                 <SimonOptimalCard optimal={result.optimal} inputs={lastInputs!} />
 
