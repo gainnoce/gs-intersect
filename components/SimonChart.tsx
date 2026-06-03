@@ -93,6 +93,14 @@ export function SimonChart({ results, optimal, inputs }: Props) {
     }
   }
 
+  // Right yaxis2: ascending branch only (power ≤ optimal power)
+  const ascByUtil = sortedByUtil.filter(r => r.power <= optimal.power);
+  const rightGreedy: SimonResult[] = [];
+  let rightLast = -Infinity;
+  for (const r of ascByUtil) {
+    if (r.utility - rightLast >= minGap) { rightGreedy.push(r); rightLast = r.utility; }
+  }
+
   // ── Plotly traces ──────────────────────────────────────────────────────────
   const data = [
     // Vertical reference line at optimal N (behind curve)
@@ -168,8 +176,8 @@ export function SimonChart({ results, optimal, inputs }: Props) {
     yaxis2: {
       overlaying: "y", side: "right",
       range: yRange,
-      tickvals: thinned.map(r => r.utility),
-      ticktext: thinned.map(r => `${r.power.toFixed(1)}%`),
+      tickvals: rightGreedy.map(r => r.utility),
+      ticktext: rightGreedy.map(r => `${r.power.toFixed(1)}%`),
       tickfont: { color: CURVE_COLOR, size: 9 },
       title: { text: "Power %", font: { color: CURVE_COLOR, size: 10 } },
       showgrid: false, zeroline: false,

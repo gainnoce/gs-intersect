@@ -417,17 +417,29 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
         tickvals: thinned.map(r => getUtil(r)),
         ticktext: thinned.map(r => getUtil(r).toFixed(3)),
       } as Partial<Plotly.LayoutAxis>,
-      yaxis2: {
-        overlaying: "y", side: "right",
-        range: yRange,
-        tickmode: "array",
-        tickvals: thinned.map(r => getUtil(r)),
-        ticktext: thinned.map(r => `${getPower(r).toFixed(1)}%`),
-        tickfont: { color: accentColor, size: 9 },
-        title: { text: powerLabel ?? "Power %", font: { color: accentColor, size: 10 } },
-        showgrid: false, zeroline: false,
-        showline: true, linecolor: accentColor, ticks: "outside",
-      } as Partial<Plotly.LayoutAxis>,
+      yaxis2: (() => {
+        // Ascending branch only: power ≤ optimal power, so labels read monotonically upward
+        const optRowAsc = sortedRows.find(r => Math.abs(getUtil(r) - optUtil) < 1e-9);
+        const optPower  = optRowAsc ? getPower(optRowAsc) : Infinity;
+        const ascRows   = sortedRows.filter(r => getPower(r) <= optPower);
+        const rightGreedy: DesignResult[] = [];
+        let rightLast = -Infinity;
+        for (const r of ascRows) {
+          const u = getUtil(r);
+          if (u - rightLast >= minGap) { rightGreedy.push(r); rightLast = u; }
+        }
+        return {
+          overlaying: "y", side: "right",
+          range: yRange,
+          tickmode: "array",
+          tickvals: rightGreedy.map(r => getUtil(r)),
+          ticktext: rightGreedy.map(r => `${getPower(r).toFixed(1)}%`),
+          tickfont: { color: accentColor, size: 9 },
+          title: { text: powerLabel ?? "Power %", font: { color: accentColor, size: 10 } },
+          showgrid: false, zeroline: false,
+          showline: true, linecolor: accentColor, ticks: "outside",
+        } as Partial<Plotly.LayoutAxis>;
+      })(),
     };
   };
 
@@ -657,6 +669,16 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     }
   }
 
+  // Overlay right yaxis2: ascending branch only (power ≤ optimal_FA.power)
+  const overlayFAAsc = sortedFA
+    .filter(r => r.power <= optimal_FA.power)
+    .sort((a, b) => a.utility_FA - b.utility_FA);
+  const overlayFAAscGreedy: DesignResult[] = [];
+  let oAscLast = -Infinity;
+  for (const r of overlayFAAsc) {
+    if (r.utility_FA - oAscLast >= overlayMinGap) { overlayFAAscGreedy.push(r); oAscLast = r.utility_FA; }
+  }
+
   const overlayLayout: Partial<Plotly.Layout> = (() => {
     const yAxisConfig: Partial<Plotly.LayoutAxis> = {
       ...baseAxis,
@@ -683,8 +705,8 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
       yaxis2: {
         overlaying: "y", side: "right",
         tickmode: "array",
-        tickvals: overlayFAThinned.map(r => r.utility_FA),
-        ticktext: overlayFAThinned.map(r => `${r.power}%`),
+        tickvals: overlayFAAscGreedy.map(r => r.utility_FA),
+        ticktext: overlayFAAscGreedy.map(r => `${r.power}%`),
         tickfont: { color: FA_COLOR, size: 9 },
         title: { text: "Power % (FA)", font: { color: FA_COLOR, size: 10 } },
         showgrid: false, zeroline: false,
