@@ -164,7 +164,7 @@ Check Render logs. Common causes:
 Run `npx tsc --noEmit` locally. The Vercel build runs the same check — fix all errors before pushing.
 
 ### Frontend not updating after push
-`git push` only deploys the R API (via Render auto-deploy). Frontend requires `vercel deploy --prod` separately.
+Both Render and Vercel auto-deploy from `git push origin main` via GitHub App integration. If Vercel isn't deploying, check the GitHub App is still connected at vercel.com → project → Settings → Git.
 
 ---
 

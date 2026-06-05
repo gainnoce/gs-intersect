@@ -72,10 +72,9 @@ Always update both places:
 git add .
 git commit -m "your message"
 git push origin main
-vercel deploy --prod
 ```
 
-**Both steps are required.** `git push` triggers the Render R API deploy automatically. `vercel deploy --prod` must be run explicitly for the frontend.
+`git push` triggers both Render (R API) and Vercel (frontend) automatically via GitHub App integration. No manual deploy command needed.
 
 ### Deploy R API (Render)
 

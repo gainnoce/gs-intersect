@@ -39,14 +39,13 @@ AstraZeneca internal clinical trial design tool. Two pages:
 
 The primary collaborator reviewing outputs is **Fabio**, an AZ statistician. He provides R reference code that the tool must match exactly.
 
-### Deployment — always do both steps
+### Deployment — one step
 
 ```bash
-git push origin main          # triggers Render auto-deploy (R API)
-vercel deploy --prod          # deploys frontend to Vercel
+git push origin main
 ```
 
-**Never assume a git push alone deploys the frontend.** Vercel auto-deploy from GitHub is not connected — always run `vercel deploy --prod` explicitly after pushing.
+This triggers both Render (R API) and Vercel (frontend) automatically via GitHub App integration. GitHub Actions also runs `tsc --noEmit` on every push to catch type errors before they reach production.
 
 ### AZ brand colours — use these, never invent new ones
 

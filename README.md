@@ -108,11 +108,7 @@ API runs on http://localhost:8000. Both endpoints include CORS headers for local
 
 ### Frontend → Vercel
 
-Auto-deploys from `main` branch. To deploy manually:
-
-```bash
-vercel deploy --prod
-```
+Auto-deploys from `main` branch via the Vercel GitHub App (connected to `gainnoce/gs-intersect`). No manual step needed.
 
 Set `NEXT_PUBLIC_API_URL` to the Render API URL in Vercel environment variables.
 
