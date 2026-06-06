@@ -115,7 +115,6 @@ export default function SimonPage() {
               <LoadingProgress
                 phase={phase}
                 powerLevels={43}
-                estimatedComputeMs={8000}
               />
             )}
 

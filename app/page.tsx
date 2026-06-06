@@ -119,7 +119,6 @@ export default function Home() {
               <LoadingProgress
                 phase={phase}
                 powerLevels={11}
-                estimatedComputeMs={10000}
               />
             )}
 

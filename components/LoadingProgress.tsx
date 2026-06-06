@@ -3,35 +3,32 @@
 import { useState, useEffect } from "react";
 
 interface Props {
-  phase:               "connecting" | "computing" | "processing";
-  powerLevels:         number;
-  estimatedComputeMs:  number;
+  phase:       "connecting" | "computing" | "processing";
+  powerLevels: number;
 }
 
-export function LoadingProgress({ phase, powerLevels, estimatedComputeMs }: Props) {
+export function LoadingProgress({ phase, powerLevels }: Props) {
   const [elapsed,  setElapsed]  = useState(0);
   const [progress, setProgress] = useState(0);
 
-  // Tick elapsed seconds during connecting phase
   useEffect(() => {
-    if (phase !== "connecting") { setElapsed(0); return; }
-    const id = setInterval(() => setElapsed(s => s + 1), 1000);
+    if (phase !== "connecting") return;
+    const start = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
     return () => clearInterval(id);
   }, [phase]);
 
-  // Smooth progress bar during computing phase — asymptotic curve so the bar
-  // always moves and never plateaus while waiting for the response.
-  // tau=25s → ~33% at 10s, ~70% at 30s, ~86% at 50s.
+  // Asymptotic curve: tau=25s → ~33% at 10s, ~70% at 30s, ~86% at 50s.
   useEffect(() => {
-    if (phase !== "computing") { if (phase === "processing") setProgress(100); return; }
-    setProgress(0);
+    if (phase !== "computing") return;
     const start = Date.now();
     const id = setInterval(() => {
-      const elapsed = Date.now() - start;
-      setProgress(88 * (1 - Math.exp(-elapsed / 25000)));
+      setProgress(88 * (1 - Math.exp(-(Date.now() - start) / 25000)));
     }, 80);
     return () => clearInterval(id);
   }, [phase]);
+
+  const displayProgress = phase === "processing" ? 100 : progress;
 
   if (phase === "connecting") {
     return (
@@ -61,10 +58,10 @@ export function LoadingProgress({ phase, powerLevels, estimatedComputeMs }: Prop
         <div className="w-64 h-1.5 rounded-full bg-az-light-platinum overflow-hidden">
           <div
             className="h-full rounded-full bg-az-mulberry transition-none"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${displayProgress}%` }}
           />
         </div>
-        <p className="text-[11px] text-az-platinum mt-2">{Math.round(progress)}%</p>
+        <p className="text-[11px] text-az-platinum mt-2">{Math.round(displayProgress)}%</p>
       </div>
     );
   }

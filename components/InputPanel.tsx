@@ -59,7 +59,7 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
   const [sfu,    setSfu]    = useState("sfLDOF");
   const [sfl,    setSfl]    = useState("sfLDOF");
 
-  // Seed state from initialValues (URL params on mount)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (!initialValues) return;
     if (initialValues.k       !== undefined) setK(String(initialValues.k));
