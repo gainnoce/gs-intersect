@@ -33,7 +33,6 @@ export default function SimonPage() {
     if (!urlInputs || autoRanRef.current) return;
     autoRanRef.current = true;
     handleRun(urlInputs as SimonInputs);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlInputs]);
 
   const handleRun = async (inputs: SimonInputs) => {

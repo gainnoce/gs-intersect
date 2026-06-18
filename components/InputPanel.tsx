@@ -59,7 +59,7 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
   const [sfu,    setSfu]    = useState("sfLDOF");
   const [sfl,    setSfl]    = useState("sfLDOF");
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!initialValues) return;
     if (initialValues.k       !== undefined) setK(String(initialValues.k));
@@ -74,6 +74,7 @@ export function InputPanel({ onRun, loading, initialValues }: Props) {
     if (initialValues.sfu     !== undefined) setSfu(initialValues.sfu);
     if (initialValues.sfl     !== undefined) setSfl(initialValues.sfl);
   }, [initialValues]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const parseArr = (s: string) =>
     s.split(",").map((v) => parseFloat(v.trim())).filter((n) => !isNaN(n));

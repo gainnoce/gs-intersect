@@ -40,6 +40,7 @@ export function SimonInputPanel({ onRun, loading, initialValues }: Props) {
   const [nmax,      setNmax]      = useState("150");
   const [submitted, setSubmitted] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!initialValues) return;
     if (initialValues.pu   !== undefined) setPu(String(initialValues.pu));
@@ -47,6 +48,7 @@ export function SimonInputPanel({ onRun, loading, initialValues }: Props) {
     if (initialValues.ep1  !== undefined) setEp1(String(initialValues.ep1));
     if (initialValues.nmax !== undefined) setNmax(String(initialValues.nmax));
   }, [initialValues]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const invalidFields = useMemo((): Set<string> => {
     if (!submitted) return new Set();
