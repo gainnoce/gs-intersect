@@ -39,7 +39,7 @@ Ncv = (s/sqrt(ns))*q1                                    # CV using N distributi
 # T test (plug in true sd as estimated sd) #####################################################
 nst = rep(NA,length(pwr)) 
 for(i in 1:length(pwr)) nst[i]=ceiling(power.t.test(n=NULL, delta = delta, sd = est_s, sig.level = alpha,power = pwr[i],type = "paired",alternative = "two.sided")$n) #two.sample
-Tcv = (sest/sqrt(nst))*qt(p=1-alpha/2, df=2*(nst-1)) # CV using t distribution, i.e. s unknown
+Tcv = (est_s/sqrt(nst))*qt(p=1-alpha/2, df=2*(nst-1)) # CV using t distribution, i.e. s unknown
 ######################################################
 
 U1 = lrp*Ncv # the net trt effect for diff in means is the difference itself
@@ -94,5 +94,4 @@ legend(box.lty=0,"topright",pch=19,col=c("black","blue"),legend = c("Z test","T 
 axis(1,at=seq(0,200,5),las=2)
 mtext("design utility (PLR*MB)",side=2,line=2.75,cex=1)
 ######################################################
-
 
