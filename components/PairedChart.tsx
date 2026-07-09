@@ -106,20 +106,27 @@ function SeriesLegend() {
 }
 
 interface PanelProps {
-  ns:          number[];
-  yZ:          number[];
-  yT:          number[];
-  optZ:        number;
-  optT:        number;
-  yTitle:      string;
-  hoverFmt:    string;
-  filename:    string;
-  pngTitle:    string;
-  showVlines?: boolean;
-  alpha?:      number;
+  ns:           number[];
+  yZ:           number[];
+  yT:           number[];
+  optZ:         number;
+  optT:         number;
+  powerZ:       number;
+  powerT:       number;
+  valZ:         number;
+  valT:         number;
+  metricLabel:  string;
+  valDecimals:  number;
+  yTitle:       string;
+  hoverFmt:     string;
+  filename:     string;
+  pngTitle:     string;
+  showVlines?:  boolean;
+  alpha?:       number;
 }
 
-function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
+function Panel({ ns, yZ, yT, optZ, optT, powerZ, powerT, valZ, valT, metricLabel,
+                 valDecimals, yTitle, hoverFmt, filename, pngTitle,
                  showVlines, alpha }: PanelProps) {
   const [div, setDiv] = useState<HTMLElement | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -213,6 +220,13 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
 
   return (
     <div className="rounded-xl border border-az-light-platinum bg-white shadow-sm overflow-hidden">
+      <div className="flex items-center px-4 pt-2.5 pb-0.5">
+        <span className="text-[10px] text-az-platinum whitespace-nowrap ml-auto">
+          Opt Z: N={optZ} · {powerZ.toFixed(1)}% · {metricLabel} {valZ.toFixed(valDecimals)}
+          {" · "}
+          T: N={optT} · {powerT.toFixed(1)}% · {valT.toFixed(valDecimals)}
+        </span>
+      </div>
       <div style={{ height: "320px" }}>
         {mounted && (
           <Plot
@@ -258,6 +272,9 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
       <Panel
         ns={ns} yZ={lrZ} yT={lrT}
         optZ={optimal_z.n} optT={optimal_t.n}
+        powerZ={optimal_z.power_z} powerT={optimal_t.power_t}
+        valZ={optimal_z.lr_z}      valT={optimal_t.lr_t}
+        metricLabel="LR+" valDecimals={2}
         yTitle="LR+ = Power / α"
         hoverFmt=".3f"
         filename="paired-lr.png"
@@ -268,6 +285,9 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
       <Panel
         ns={ns} yZ={mbZ} yT={mbT}
         optZ={optimal_z.n} optT={optimal_t.n}
+        powerZ={optimal_z.power_z} powerT={optimal_t.power_t}
+        valZ={optimal_z.mb_z}      valT={optimal_t.mb_t}
+        metricLabel="MB" valDecimals={4}
         yTitle="Min. detectable benefit"
         hoverFmt=".4f"
         filename="paired-mb.png"
@@ -277,6 +297,9 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
       <Panel
         ns={ns} yZ={utlZ} yT={utlT}
         optZ={optimal_z.n} optT={optimal_t.n}
+        powerZ={optimal_z.power_z} powerT={optimal_t.power_t}
+        valZ={optimal_z.utility_z} valT={optimal_t.utility_t}
+        metricLabel="U" valDecimals={2}
         yTitle="Utility = LR+ × MB"
         hoverFmt=".4f"
         filename="paired-utility.png"
