@@ -277,6 +277,29 @@ export function exportCSV(results: DesignResult[], k = 2): void {
   URL.revokeObjectURL(url);
 }
 
+export function exportPairedCSV(results: PairedResult[]): void {
+  const headers = ["N", "Power Z (%)", "Power T (%)", "LR+ Z", "LR+ T", "MB Z", "MB T", "Utility Z", "Utility T"];
+  const rows = results.map(r => [
+    r.n,
+    r.power_z.toFixed(4),
+    r.power_t.toFixed(4),
+    r.lr_z.toFixed(4),
+    r.lr_t.toFixed(4),
+    r.mb_z.toFixed(6),
+    r.mb_t.toFixed(6),
+    r.utility_z.toFixed(6),
+    r.utility_t.toFixed(6),
+  ]);
+  const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "paired-zt-results.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Simon 2-Stage ─────────────────────────────────────────────────────────────
 
 export interface SimonInputs {

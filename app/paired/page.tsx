@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { PairedInputPanel }  from "@/components/PairedInputPanel";
-import { PairedChart }       from "@/components/PairedChart";
-import { PairedOptimalCard } from "@/components/PairedOptimalCard";
-import { LoadingProgress }   from "@/components/LoadingProgress";
-import { runPaired }         from "@/lib/api";
+import { PairedInputPanel }    from "@/components/PairedInputPanel";
+import { PairedChart }         from "@/components/PairedChart";
+import { PairedOptimalCard }   from "@/components/PairedOptimalCard";
+import { PairedResultsTable }  from "@/components/PairedResultsTable";
+import { RawOutput }           from "@/components/RawOutput";
+import { LoadingProgress }     from "@/components/LoadingProgress";
+import { runPaired }           from "@/lib/api";
 import type { PairedInputs, PairedResponse } from "@/lib/api";
 import { AlertCircle } from "lucide-react";
 
@@ -119,6 +121,20 @@ export default function PairedPage() {
                   inputs={lastInputs!}
                   delta={result.delta}
                 />
+
+                <div className="space-y-3">
+                  <h2 className="text-sm font-semibold text-az-navy print-hidden" style={{ fontFamily: "var(--font-heading)" }}>
+                    Full Results
+                  </h2>
+                  <PairedResultsTable
+                    results={result.results}
+                    optimal_z={result.optimal_z}
+                    optimal_t={result.optimal_t}
+                    inputs={lastInputs!}
+                  />
+                </div>
+
+                <RawOutput response={result} inputs={lastInputs!} />
               </>
             )}
           </div>
