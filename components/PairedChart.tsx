@@ -40,22 +40,35 @@ const vlineTrace = (x: number, yRange: number[], color: string, dash: "solid" | 
   hoverinfo: "skip" as const, showlegend: false,
 });
 
+// Re-enables showlegend on named curve traces and injects horizontal bottom legend
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const downloadPng = async (div: HTMLElement | null, filename: string, title: string) => {
   if (!div || !getPlotly()) return;
   const Plotly = getPlotly();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = div as any;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const exportData = (d.data ?? []).map((trace: any) =>
+    (trace.name === "Z test" || trace.name === "t test")
+      ? { ...trace, showlegend: true }
+      : trace
+  );
+
   const exportLayout = {
     ...(d.layout ?? {}),
     title: { text: title, font: { family: "Inter, sans-serif", size: 12, color: "#1a2e44" }, x: 0.5, xanchor: "center" },
-    margin: { ...(d.layout?.margin ?? {}), t: (d.layout?.margin?.t ?? 40) + 40 },
+    showlegend: true,
+    legend: { orientation: "h", x: 0.5, xanchor: "center", y: -0.18,
+              font: { family: "Inter, sans-serif", size: 10, color: "#3f4444" } },
+    margin: { ...(d.layout?.margin ?? {}), t: (d.layout?.margin?.t ?? 40) + 40, b: (d.layout?.margin?.b ?? 50) + 40 },
     paper_bgcolor: "#ffffff",
     plot_bgcolor:  "#f8faf9",
   };
+
   const url: string = await Plotly.toImage(
-    { data: d.data ?? [], layout: exportLayout },
-    { format: "png", scale: 3, width: div.clientWidth, height: div.clientHeight + 60 },
+    { data: exportData, layout: exportLayout },
+    { format: "png", scale: 3, width: div.clientWidth, height: div.clientHeight + 100 },
   );
   const a = document.createElement("a"); a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -70,6 +83,28 @@ const markerSizeArray = (len: number, visibleSize: number): number[] => {
   return Array.from({ length: len }, (_, i) => (sparse.has(i) ? visibleSize : 0));
 };
 
+// Inline HTML legend matching GS Design's VlineLegend style
+function SeriesLegend() {
+  return (
+    <div className="flex items-center gap-4 text-[10px] text-az-graphite">
+      <span className="flex items-center gap-1.5">
+        <svg width="20" height="10" viewBox="0 0 20 10">
+          <line x1="0" y1="5" x2="20" y2="5" stroke={COLOR_Z} strokeWidth="2" />
+          <circle cx="10" cy="5" r="2.5" fill={COLOR_Z} />
+        </svg>
+        Z test
+      </span>
+      <span className="flex items-center gap-1.5">
+        <svg width="20" height="10" viewBox="0 0 20 10">
+          <line x1="0" y1="5" x2="20" y2="5" stroke={COLOR_T} strokeWidth="1.5" strokeDasharray="4 2" />
+          <circle cx="10" cy="5" r="2.5" fill={COLOR_T} />
+        </svg>
+        t test
+      </span>
+    </div>
+  );
+}
+
 interface PanelProps {
   ns:          number[];
   yZ:          number[];
@@ -81,23 +116,18 @@ interface PanelProps {
   filename:    string;
   pngTitle:    string;
   showVlines?: boolean;
-  // When provided, adds a power-% right axis calibrated as power = LR+ × alpha × 100
   alpha?:      number;
-  legendSide?: "left" | "right";
 }
 
 function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
-                 showVlines, alpha, legendSide = "left" }: PanelProps) {
+                 showVlines, alpha }: PanelProps) {
   const [div, setDiv] = useState<HTMLElement | null>(null);
   const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true); // eslint-disable-line react-hooks/set-state-in-effect
-  }, []);
+  useEffect(() => setMounted(true), []);
 
   const yRange   = yPad([...yZ, ...yT]);
   const hasPower = alpha !== undefined;
 
-  // Single-trace approach: per-point marker sizes so the line never breaks
   const mszZ = markerSizeArray(ns.length, 5);
   const mszT = markerSizeArray(ns.length, 5);
 
@@ -119,50 +149,39 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
     } as Plotly.Data);
   }
 
-  // Single trace per series: lines+markers with per-point size array
+  // Single trace per series; showlegend: false in the live view — PNG export re-enables it
   data.push(
     {
       x: ns, y: yZ, type: "scatter", mode: "lines+markers",
       line:   { color: COLOR_Z, width: 2 },
       marker: { size: mszZ, color: COLOR_Z },
-      name: "Z test", showlegend: true,
+      name: "Z test", showlegend: false,
       hovertemplate: `Z: %{y:${hoverFmt}}<extra></extra>`,
     } as Plotly.Data,
     {
       x: ns, y: yT, type: "scatter", mode: "lines+markers",
       line:   { color: COLOR_T, width: 2, dash: "dash" },
       marker: { size: mszT, color: COLOR_T },
-      name: "t test", showlegend: true,
+      name: "t test", showlegend: false,
       hovertemplate: `t: %{y:${hoverFmt}}<extra></extra>`,
     } as Plotly.Data,
   );
 
-  // Power right-axis ticks: round % values at 10% intervals within range
+  // Power right-axis ticks: 10% intervals within the displayed range
   let pwrTickVals: number[] = [];
   let pwrTickText: string[] = [];
   if (hasPower) {
     const pwrMin = yRange[0] * alpha! * 100;
     const pwrMax = yRange[1] * alpha! * 100;
-    const candidates = [10, 20, 30, 40, 50, 60, 70, 80, 90];
-    const ticks = candidates.filter(p => p >= pwrMin && p <= pwrMax);
-    pwrTickVals = ticks;
-    pwrTickText = ticks.map(p => `${p}%`);
+    pwrTickVals = [10, 20, 30, 40, 50, 60, 70, 80, 90].filter(p => p >= pwrMin && p <= pwrMax);
+    pwrTickText = pwrTickVals.map(p => `${p}%`);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const panelLayout: any = {
     paper_bgcolor: "transparent",
     plot_bgcolor:  "#f8faf9",
-    showlegend:    true,
-    legend: {
-      x: legendSide === "right" ? 0.98 : 0.02,
-      y: 0.98,
-      xanchor: legendSide === "right" ? "right" : "left",
-      yanchor: "top",
-      bgcolor: "rgba(255,255,255,0.85)",
-      bordercolor: "#ebefee", borderwidth: 1,
-      font: { size: 10, color: "#3f4444" },
-    },
+    showlegend:    false,
     font:      { family: "Inter, sans-serif", color: "#3f4444" },
     margin:    { t: 40, r: hasPower ? 56 : 20, b: 50, l: 64 },
     hovermode: "x unified",
@@ -207,7 +226,7 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
         )}
       </div>
       <div className="flex items-center justify-between px-4 pb-3 pt-2">
-        <p className="text-[10px] text-az-platinum">Drag to zoom · Double-click to reset</p>
+        <SeriesLegend />
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={resetView}
             className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs h-7">
@@ -236,7 +255,6 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
 
   return (
     <div className="grid grid-cols-3 gap-3">
-      {/* LR+: power right axis calibrated from LR+ × alpha; legend top-left */}
       <Panel
         ns={ns} yZ={lrZ} yT={lrT}
         optZ={optimal_z.n} optT={optimal_t.n}
@@ -246,9 +264,7 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
         pngTitle={`Positive Likelihood Ratio · ${pngBase}`}
         showVlines={false}
         alpha={inputs.alpha}
-        legendSide="left"
       />
-      {/* MB: no right axis, no vlines; legend top-right (curves start high on left) */}
       <Panel
         ns={ns} yZ={mbZ} yT={mbT}
         optZ={optimal_z.n} optT={optimal_t.n}
@@ -257,9 +273,7 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
         filename="paired-mb.png"
         pngTitle={`Minimum Detectable Benefit · ${pngBase}`}
         showVlines={false}
-        legendSide="right"
       />
-      {/* Utility: vertical optimal-N markers; legend top-right */}
       <Panel
         ns={ns} yZ={utlZ} yT={utlT}
         optZ={optimal_z.n} optT={optimal_t.n}
@@ -268,7 +282,6 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
         filename="paired-utility.png"
         pngTitle={`Design Utility · ${pngBase}`}
         showVlines={true}
-        legendSide="right"
       />
     </div>
   );

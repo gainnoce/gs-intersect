@@ -39,7 +39,6 @@ export function NavBar() {
           })}
         </nav>
         <div className="ml-auto hidden sm:flex items-center gap-3">
-          <p className="text-xs font-medium text-az-graphite">AstraZeneca</p>
           <div
             className="w-3 h-8 rounded-sm"
             style={{ background: "linear-gradient(180deg, #830051 0%, #003865 100%)" }}
