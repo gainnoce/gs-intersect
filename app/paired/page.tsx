@@ -16,11 +16,11 @@ export default function PairedPage() {
 
   const handleRun = async (inputs: PairedInputs) => {
     setLoading(true);
+    setLastInputs(inputs);
     setError(null);
     try {
       const data = await runPaired(inputs);
       setResult(data);
-      setLastInputs(inputs);
     } catch (e) {
       const raw   = e instanceof Error ? e.message : "Unknown error";
       const isNet = /failed to fetch|network|load failed/i.test(raw);
