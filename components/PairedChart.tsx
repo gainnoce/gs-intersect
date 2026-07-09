@@ -61,13 +61,13 @@ const downloadPng = async (div: HTMLElement | null, filename: string, title: str
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 };
 
-// Returns indices for ~9 evenly-spaced sparse markers, always including last point
-const sparseIndices = (len: number): number[] => {
-  const step = Math.max(1, Math.round((len - 1) / 8));
-  const out: number[] = [];
-  for (let i = 0; i < len; i += step) out.push(i);
-  if (out[out.length - 1] !== len - 1) out.push(len - 1);
-  return out;
+// Builds a per-point marker size array: visible (~9 evenly spaced) or 0 (invisible)
+const markerSizeArray = (len: number, visibleSize: number): number[] => {
+  const step  = Math.max(1, Math.round((len - 1) / 8));
+  const sparse = new Set<number>();
+  for (let i = 0; i < len; i += step) sparse.add(i);
+  sparse.add(len - 1);
+  return Array.from({ length: len }, (_, i) => (sparse.has(i) ? visibleSize : 0));
 };
 
 interface PanelProps {
@@ -97,11 +97,9 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
   const yRange   = yPad([...yZ, ...yT]);
   const hasPower = alpha !== undefined;
 
-  // Sparse marker indices (~9 evenly spaced)
-  const idx       = sparseIndices(ns.length);
-  const mNs       = idx.map(i => ns[i]);
-  const mYZ       = idx.map(i => yZ[i]);
-  const mYT       = idx.map(i => yT[i]);
+  // Single-trace approach: per-point marker sizes so the line never breaks
+  const mszZ = markerSizeArray(ns.length, 5);
+  const mszT = markerSizeArray(ns.length, 5);
 
   const data: Plotly.Data[] = [];
 
@@ -121,39 +119,31 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
     } as Plotly.Data);
   }
 
-  // Lines through all points (smooth), then separate sparse markers
+  // Single trace per series: lines+markers with per-point size array
   data.push(
     {
-      x: ns, y: yZ, type: "scatter", mode: "lines",
-      line: { color: COLOR_Z, width: 2 },
+      x: ns, y: yZ, type: "scatter", mode: "lines+markers",
+      line:   { color: COLOR_Z, width: 2 },
+      marker: { size: mszZ, color: COLOR_Z },
       name: "Z test", showlegend: true,
       hovertemplate: `Z: %{y:${hoverFmt}}<extra></extra>`,
     } as Plotly.Data,
     {
-      x: mNs, y: mYZ, type: "scatter", mode: "markers",
-      marker: { size: 5, color: COLOR_Z },
-      showlegend: false, hoverinfo: "skip",
-    } as Plotly.Data,
-    {
-      x: ns, y: yT, type: "scatter", mode: "lines",
-      line: { color: COLOR_T, width: 2, dash: "dash" },
+      x: ns, y: yT, type: "scatter", mode: "lines+markers",
+      line:   { color: COLOR_T, width: 2, dash: "dash" },
+      marker: { size: mszT, color: COLOR_T },
       name: "t test", showlegend: true,
       hovertemplate: `t: %{y:${hoverFmt}}<extra></extra>`,
     } as Plotly.Data,
-    {
-      x: mNs, y: mYT, type: "scatter", mode: "markers",
-      marker: { size: 5, color: COLOR_T },
-      showlegend: false, hoverinfo: "skip",
-    } as Plotly.Data,
   );
 
-  // Power right-axis ticks: round % values that fall within the LR+ × alpha range
+  // Power right-axis ticks: round % values at 10% intervals within range
   let pwrTickVals: number[] = [];
   let pwrTickText: string[] = [];
   if (hasPower) {
     const pwrMin = yRange[0] * alpha! * 100;
     const pwrMax = yRange[1] * alpha! * 100;
-    const candidates = [10, 20, 30, 40, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 99];
+    const candidates = [10, 20, 30, 40, 50, 60, 70, 80, 90];
     const ticks = candidates.filter(p => p >= pwrMin && p <= pwrMax);
     pwrTickVals = ticks;
     pwrTickText = ticks.map(p => `${p}%`);

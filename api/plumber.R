@@ -33,7 +33,7 @@ function(req) {
     lr_z  <- pwr_z / alpha
     mb_z  <- z_crit * sigma / sqrt(n)
 
-    df     <- n - 1L
+    df     <- 2L * (n - 1L)   # paper formula: T_(1-α/2, 2(N-1)) degrees of freedom
     t_crit <- qt(1 - alpha / 2, df = df)
     pwr_t  <- 1 - pt(t_crit, df = df, ncp = ncp) + pt(-t_crit, df = df, ncp = ncp)
     lr_t   <- pwr_t / alpha
