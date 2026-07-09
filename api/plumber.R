@@ -17,6 +17,10 @@ function(req, res) {
   plumber::forward()
 }
 
+#* Health check
+#* @get /health
+function() list(status = "ok")
+
 #* Run GS utility optimization
 #* @post /optimize
 function(req) {
