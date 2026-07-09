@@ -36,6 +36,7 @@ export default function Home() {
     if (!urlInputs || autoRanRef.current) return;
     autoRanRef.current = true;
     handleRun(urlInputs as DesignInputs);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlInputs]);
 
   const handleRun = async (inputs: DesignInputs) => {

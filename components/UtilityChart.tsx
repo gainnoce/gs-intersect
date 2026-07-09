@@ -323,8 +323,7 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const ChartButtons = ({ div, name: _name, axes, onDownload }: { div: HTMLElement | null; name: string; axes: string[]; onDownload?: () => void }) => (
+  const ChartButtons = ({ div, name, axes, onDownload }: { div: HTMLElement | null; name: string; axes: string[]; onDownload?: () => void }) => (
     <div className="flex justify-end gap-2">
       <Button variant="outline" size="sm" onClick={() => resetView(div, axes)}
         className="border-az-platinum text-az-graphite hover:text-az-mulberry hover:border-az-mulberry gap-1.5 bg-white text-xs h-7">
@@ -447,9 +446,9 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
 
   // Vertical reference line — solid for the chart's own optimal, dashed for the cross-optimal.
   // Drawn before the curve so it sits behind all data.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   // vlines are purely visual — hoverinfo:"skip" keeps them out of Plotly's "closest"
   // detection so the curve dots always win hover at the same x-column.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vline = (x: number, yRange: number[], color: string, dash: "solid" | "dash"): any => ({
     x: [x, x], y: [yRange[0], yRange[1]],
     type: "scatter", mode: "lines",
@@ -642,6 +641,33 @@ export function UtilityChart({ results, optimal_IA, optimal_FA, optimal_IAs, k }
   let oAllLast = -Infinity;
   for (const u of allOverlayUtils) {
     if (u - oAllLast >= overlayMinGap) { overlayAllGreedy.push(u); oAllLast = u; }
+  }
+
+  // Right yaxis2 — greedy-thin FA only (need DesignResult for power% labels)
+  const overlayFAGreedy: DesignResult[] = [];
+  let oFALast = -Infinity;
+  for (const r of sortedFA) {
+    if (r.utility_FA - oFALast >= overlayMinGap) { overlayFAGreedy.push(r); oFALast = r.utility_FA; }
+  }
+
+  let overlayFAThinned = overlayFAGreedy;
+  if (!overlayFAGreedy.some(r => Math.abs(r.utility_FA - optimal_FA.utility_FA) < 1e-9)) {
+    const optRow = sortedFA.find(r => Math.abs(r.utility_FA - optimal_FA.utility_FA) < 1e-9);
+    if (optRow) {
+      const withOpt = [...overlayFAGreedy, optRow].sort((a, b) => a.utility_FA - b.utility_FA);
+      const regreedy: DesignResult[] = [];
+      let last2 = -Infinity;
+      for (const r of withOpt) {
+        const isOpt = Math.abs(r.utility_FA - optimal_FA.utility_FA) < 1e-9;
+        if (isOpt) {
+          if (regreedy.length > 0 && r.utility_FA - regreedy[regreedy.length - 1].utility_FA < overlayMinGap) {
+            regreedy.pop();
+          }
+          regreedy.push(r); last2 = r.utility_FA;
+        } else if (r.utility_FA - last2 >= overlayMinGap) { regreedy.push(r); last2 = r.utility_FA; }
+      }
+      overlayFAThinned = regreedy;
+    }
   }
 
   // Overlay right yaxis2: ascending branch only (power ≤ optimal_FA.power)

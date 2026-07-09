@@ -44,9 +44,7 @@ const yHeadroom = (arr: number[]) => {
 export function SimonChart({ results, optimal, inputs }: Props) {
   const [chartDiv, setChartDiv] = useState<HTMLElement | null>(null);
   const [mounted,  setMounted]  = useState(false);
-  useEffect(() => {
-    setMounted(true); // eslint-disable-line react-hooks/set-state-in-effect
-  }, []);
+  useEffect(() => setMounted(true), []);
 
   // Sort by N ascending so the line draws correctly
   const sorted = [...results].sort((a, b) => a.n - b.n);
