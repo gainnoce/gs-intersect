@@ -15,8 +15,8 @@ interface Props {
   inputs:    PairedInputs;
 }
 
-const COLOR_Z = "#003865";   // AZ navy  — Z test
-const COLOR_T = "#1469b5";   // AZ blue  — T test
+const COLOR_Z = "#003865";
+const COLOR_T = "#1469b5";
 
 const baseAxis = {
   gridcolor:     "#ebefee",
@@ -61,6 +61,15 @@ const downloadPng = async (div: HTMLElement | null, filename: string, title: str
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 };
 
+// Returns indices for ~9 evenly-spaced sparse markers, always including last point
+const sparseIndices = (len: number): number[] => {
+  const step = Math.max(1, Math.round((len - 1) / 8));
+  const out: number[] = [];
+  for (let i = 0; i < len; i += step) out.push(i);
+  if (out[out.length - 1] !== len - 1) out.push(len - 1);
+  return out;
+};
+
 interface PanelProps {
   ns:          number[];
   yZ:          number[];
@@ -72,15 +81,13 @@ interface PanelProps {
   filename:    string;
   pngTitle:    string;
   showVlines?: boolean;
-  // right y-axis: power % (LR+ panel only)
-  pwrZ?:       number[];
-  pwrT?:       number[];
-  // legend anchor: "left" (default) or "right" to avoid overlapping the curves
+  // When provided, adds a power-% right axis calibrated as power = LR+ × alpha × 100
+  alpha?:      number;
   legendSide?: "left" | "right";
 }
 
 function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
-                 showVlines, pwrZ, pwrT, legendSide = "left" }: PanelProps) {
+                 showVlines, alpha, legendSide = "left" }: PanelProps) {
   const [div, setDiv] = useState<HTMLElement | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -88,7 +95,13 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
   }, []);
 
   const yRange   = yPad([...yZ, ...yT]);
-  const hasPower = Boolean(pwrZ && pwrT);
+  const hasPower = alpha !== undefined;
+
+  // Sparse marker indices (~9 evenly spaced)
+  const idx       = sparseIndices(ns.length);
+  const mNs       = idx.map(i => ns[i]);
+  const mYZ       = idx.map(i => yZ[i]);
+  const mYT       = idx.map(i => yT[i]);
 
   const data: Plotly.Data[] = [];
 
@@ -97,47 +110,54 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
     data.push(vlineTrace(optT, yRange, COLOR_T, "dash")  as Plotly.Data);
   }
 
-  // Ghost trace to materialise yaxis2 when showing power
+  // Ghost trace to materialise yaxis2 when showing power right axis
   if (hasPower) {
+    const pwrRange = [yRange[0] * alpha! * 100, yRange[1] * alpha! * 100];
     data.push({
-      x: [ns[0]], y: [0], yaxis: "y2",
-      type: "scatter", mode: "lines",
-      line: { color: "transparent", width: 0 },
+      x: [ns[0], ns[ns.length - 1]], y: [pwrRange[0], pwrRange[1]],
+      yaxis: "y2", type: "scatter", mode: "markers",
+      marker: { size: 0.01, opacity: 0 },
       hoverinfo: "skip", showlegend: false,
-    } as Plotly.Data);
-    // Dotted power curves on right axis — not in legend (LR+ lines imply them)
-    data.push({
-      x: ns, y: pwrZ!, yaxis: "y2",
-      type: "scatter", mode: "lines",
-      line: { color: COLOR_Z, width: 1, dash: "dot" },
-      hovertemplate: "Pwr Z: %{y:.1f}%<extra></extra>",
-      showlegend: false,
-    } as Plotly.Data);
-    data.push({
-      x: ns, y: pwrT!, yaxis: "y2",
-      type: "scatter", mode: "lines",
-      line: { color: COLOR_T, width: 1, dash: "dot" },
-      hovertemplate: "Pwr t: %{y:.1f}%<extra></extra>",
-      showlegend: false,
     } as Plotly.Data);
   }
 
+  // Lines through all points (smooth), then separate sparse markers
   data.push(
     {
-      x: ns, y: yZ, type: "scatter", mode: "lines+markers",
-      line:   { color: COLOR_Z, width: 2 },
-      marker: { size: 4, color: COLOR_Z },
+      x: ns, y: yZ, type: "scatter", mode: "lines",
+      line: { color: COLOR_Z, width: 2 },
       name: "Z test", showlegend: true,
       hovertemplate: `Z: %{y:${hoverFmt}}<extra></extra>`,
     } as Plotly.Data,
     {
-      x: ns, y: yT, type: "scatter", mode: "lines+markers",
-      line:   { color: COLOR_T, width: 2, dash: "dash" },
-      marker: { size: 4, color: COLOR_T },
+      x: mNs, y: mYZ, type: "scatter", mode: "markers",
+      marker: { size: 5, color: COLOR_Z },
+      showlegend: false, hoverinfo: "skip",
+    } as Plotly.Data,
+    {
+      x: ns, y: yT, type: "scatter", mode: "lines",
+      line: { color: COLOR_T, width: 2, dash: "dash" },
       name: "t test", showlegend: true,
       hovertemplate: `t: %{y:${hoverFmt}}<extra></extra>`,
     } as Plotly.Data,
+    {
+      x: mNs, y: mYT, type: "scatter", mode: "markers",
+      marker: { size: 5, color: COLOR_T },
+      showlegend: false, hoverinfo: "skip",
+    } as Plotly.Data,
   );
+
+  // Power right-axis ticks: round % values that fall within the LR+ × alpha range
+  let pwrTickVals: number[] = [];
+  let pwrTickText: string[] = [];
+  if (hasPower) {
+    const pwrMin = yRange[0] * alpha! * 100;
+    const pwrMax = yRange[1] * alpha! * 100;
+    const candidates = [10, 20, 30, 40, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 99];
+    const ticks = candidates.filter(p => p >= pwrMin && p <= pwrMax);
+    pwrTickVals = ticks;
+    pwrTickText = ticks.map(p => `${p}%`);
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const panelLayout: any = {
@@ -166,9 +186,10 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
       title: { text: "Power (%)", font: { color: "#9db0ac", size: 10 } },
       overlaying: "y",
       side: "right",
-      ticksuffix: "%",
-      tickformat: ".0f",
-      range: [0, 110],
+      range: [yRange[0] * alpha! * 100, yRange[1] * alpha! * 100],
+      tickmode: "array",
+      tickvals: pwrTickVals,
+      ticktext: pwrTickText,
       showgrid: false,
     };
   }
@@ -220,14 +241,12 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
   const mbT  = results.map(r => r.mb_t);
   const utlZ = results.map(r => r.utility_z);
   const utlT = results.map(r => r.utility_t);
-  const pwrZ = results.map(r => r.power_z);
-  const pwrT = results.map(r => r.power_t);
 
   const pngBase = `μ_D=${inputs.mu_D} σ=${inputs.sigma} α=${inputs.alpha}`;
 
   return (
     <div className="grid grid-cols-3 gap-3">
-      {/* LR+: power right axis; legend top-left (curves start low on left) */}
+      {/* LR+: power right axis calibrated from LR+ × alpha; legend top-left */}
       <Panel
         ns={ns} yZ={lrZ} yT={lrT}
         optZ={optimal_z.n} optT={optimal_t.n}
@@ -236,7 +255,7 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
         filename="paired-lr.png"
         pngTitle={`Positive Likelihood Ratio · ${pngBase}`}
         showVlines={false}
-        pwrZ={pwrZ} pwrT={pwrT}
+        alpha={inputs.alpha}
         legendSide="left"
       />
       {/* MB: no right axis, no vlines; legend top-right (curves start high on left) */}
@@ -250,7 +269,7 @@ export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
         showVlines={false}
         legendSide="right"
       />
-      {/* Utility: vertical optimal-N markers; legend top-right (peak is left-of-center) */}
+      {/* Utility: vertical optimal-N markers; legend top-right */}
       <Panel
         ns={ns} yZ={utlZ} yT={utlT}
         optZ={optimal_z.n} optT={optimal_t.n}
