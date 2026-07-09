@@ -40,17 +40,6 @@ const vlineTrace = (x: number, yRange: number[], color: string, dash: "solid" | 
   hoverinfo: "skip" as const, showlegend: false,
 });
 
-const layout = (yRange: number[], yTitle: string): Partial<Plotly.Layout> => ({
-  paper_bgcolor: "transparent",
-  plot_bgcolor:  "#f8faf9",
-  showlegend:    false,
-  font:   { family: "Inter, sans-serif", color: "#3f4444" },
-  margin: { t: 40, r: 20, b: 50, l: 64 },
-  hovermode: "x unified",
-  xaxis: { ...baseAxis, title: { text: "Sample size N" } } as Partial<Plotly.LayoutAxis>,
-  yaxis: { ...baseAxis, title: { text: yTitle }, range: yRange } as Partial<Plotly.LayoutAxis>,
-});
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const downloadPng = async (div: HTMLElement | null, filename: string, title: string) => {
   if (!div || !getPlotly()) return;
@@ -61,56 +50,135 @@ const downloadPng = async (div: HTMLElement | null, filename: string, title: str
     ...(d.layout ?? {}),
     title: { text: title, font: { family: "Inter, sans-serif", size: 12, color: "#1a2e44" }, x: 0.5, xanchor: "center" },
     margin: { ...(d.layout?.margin ?? {}), t: (d.layout?.margin?.t ?? 40) + 40 },
+    paper_bgcolor: "#ffffff",
+    plot_bgcolor:  "#f8faf9",
   };
   const url: string = await Plotly.toImage(
     { data: d.data ?? [], layout: exportLayout },
-    { format: "png", scale: 2, width: div.clientWidth, height: div.clientHeight + 60 },
+    { format: "png", scale: 3, width: div.clientWidth, height: div.clientHeight + 60 },
   );
   const a = document.createElement("a"); a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 };
 
 interface PanelProps {
-  ns:       number[];
-  yZ:       number[];
-  yT:       number[];
-  optZ:     number;
-  optT:     number;
-  yTitle:   string;
-  hoverFmt: string;
-  filename: string;
-  pngTitle: string;
+  ns:          number[];
+  yZ:          number[];
+  yT:          number[];
+  optZ:        number;
+  optT:        number;
+  yTitle:      string;
+  hoverFmt:    string;
+  filename:    string;
+  pngTitle:    string;
+  showVlines?: boolean;
+  // right y-axis: power % (LR+ panel only)
+  pwrZ?:       number[];
+  pwrT?:       number[];
+  // legend anchor: "left" (default) or "right" to avoid overlapping the curves
+  legendSide?: "left" | "right";
 }
 
-function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle }: PanelProps) {
+function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle,
+                 showVlines, pwrZ, pwrT, legendSide = "left" }: PanelProps) {
   const [div, setDiv] = useState<HTMLElement | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
 
-  const yRange = yPad([...yZ, ...yT]);
+  const yRange   = yPad([...yZ, ...yT]);
+  const hasPower = Boolean(pwrZ && pwrT);
 
-  const data: Plotly.Data[] = [
-    vlineTrace(optZ, yRange, COLOR_Z, "solid") as Plotly.Data,
-    vlineTrace(optT, yRange, COLOR_T, "dash")  as Plotly.Data,
+  const data: Plotly.Data[] = [];
+
+  if (showVlines) {
+    data.push(vlineTrace(optZ, yRange, COLOR_Z, "solid") as Plotly.Data);
+    data.push(vlineTrace(optT, yRange, COLOR_T, "dash")  as Plotly.Data);
+  }
+
+  // Ghost trace to materialise yaxis2 when showing power
+  if (hasPower) {
+    data.push({
+      x: [ns[0]], y: [0], yaxis: "y2",
+      type: "scatter", mode: "lines",
+      line: { color: "transparent", width: 0 },
+      hoverinfo: "skip", showlegend: false,
+    } as Plotly.Data);
+    // Dotted power curves on right axis — not in legend (LR+ lines imply them)
+    data.push({
+      x: ns, y: pwrZ!, yaxis: "y2",
+      type: "scatter", mode: "lines",
+      line: { color: COLOR_Z, width: 1, dash: "dot" },
+      hovertemplate: "Pwr Z: %{y:.1f}%<extra></extra>",
+      showlegend: false,
+    } as Plotly.Data);
+    data.push({
+      x: ns, y: pwrT!, yaxis: "y2",
+      type: "scatter", mode: "lines",
+      line: { color: COLOR_T, width: 1, dash: "dot" },
+      hovertemplate: "Pwr t: %{y:.1f}%<extra></extra>",
+      showlegend: false,
+    } as Plotly.Data);
+  }
+
+  data.push(
     {
-      x: ns, y: yZ, type: "scatter", mode: "lines",
-      line: { color: COLOR_Z, width: 2 },
-      name: "Paired Z test",
+      x: ns, y: yZ, type: "scatter", mode: "lines+markers",
+      line:   { color: COLOR_Z, width: 2 },
+      marker: { size: 4, color: COLOR_Z },
+      name: "Z test", showlegend: true,
       hovertemplate: `Z: %{y:${hoverFmt}}<extra></extra>`,
     } as Plotly.Data,
     {
-      x: ns, y: yT, type: "scatter", mode: "lines",
-      line: { color: COLOR_T, width: 2, dash: "dash" },
-      name: "Paired t test",
+      x: ns, y: yT, type: "scatter", mode: "lines+markers",
+      line:   { color: COLOR_T, width: 2, dash: "dash" },
+      marker: { size: 4, color: COLOR_T },
+      name: "t test", showlegend: true,
       hovertemplate: `t: %{y:${hoverFmt}}<extra></extra>`,
     } as Plotly.Data,
-  ];
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const panelLayout: any = {
+    paper_bgcolor: "transparent",
+    plot_bgcolor:  "#f8faf9",
+    showlegend:    true,
+    legend: {
+      x: legendSide === "right" ? 0.98 : 0.02,
+      y: 0.98,
+      xanchor: legendSide === "right" ? "right" : "left",
+      yanchor: "top",
+      bgcolor: "rgba(255,255,255,0.85)",
+      bordercolor: "#ebefee", borderwidth: 1,
+      font: { size: 10, color: "#3f4444" },
+    },
+    font:      { family: "Inter, sans-serif", color: "#3f4444" },
+    margin:    { t: 40, r: hasPower ? 56 : 20, b: 50, l: 64 },
+    hovermode: "x unified",
+    xaxis: { ...baseAxis, title: { text: "Sample size N" } },
+    yaxis: { ...baseAxis, title: { text: yTitle }, range: yRange },
+  };
+
+  if (hasPower) {
+    panelLayout.yaxis2 = {
+      ...baseAxis,
+      title: { text: "Power (%)", font: { color: "#9db0ac", size: 10 } },
+      overlaying: "y",
+      side: "right",
+      ticksuffix: "%",
+      tickformat: ".0f",
+      range: [0, 110],
+      showgrid: false,
+    };
+  }
 
   const resetView = () => {
     if (!div || !getPlotly()) return;
-    getPlotly().relayout(div, { "xaxis.autorange": true, "yaxis.autorange": true });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const upd: any = { "xaxis.autorange": true, "yaxis.autorange": true };
+    if (hasPower) upd["yaxis2.autorange"] = true;
+    getPlotly().relayout(div, upd);
   };
 
   return (
@@ -119,7 +187,7 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle }:
         {mounted && (
           <Plot
             data={data}
-            layout={layout(yRange, yTitle) as Partial<Plotly.Layout>}
+            layout={panelLayout as Partial<Plotly.Layout>}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: "100%", height: "320px" }}
             onInitialized={(_, d) => setDiv(d)}
@@ -145,59 +213,54 @@ function Panel({ ns, yZ, yT, optZ, optT, yTitle, hoverFmt, filename, pngTitle }:
 }
 
 export function PairedChart({ results, optimal_z, optimal_t, inputs }: Props) {
-  const ns    = results.map(r => r.n);
-  const lrZ   = results.map(r => r.lr_z);
-  const lrT   = results.map(r => r.lr_t);
-  const mbZ   = results.map(r => r.mb_z);
-  const mbT   = results.map(r => r.mb_t);
-  const utlZ  = results.map(r => r.utility_z);
-  const utlT  = results.map(r => r.utility_t);
+  const ns   = results.map(r => r.n);
+  const lrZ  = results.map(r => r.lr_z);
+  const lrT  = results.map(r => r.lr_t);
+  const mbZ  = results.map(r => r.mb_z);
+  const mbT  = results.map(r => r.mb_t);
+  const utlZ = results.map(r => r.utility_z);
+  const utlT = results.map(r => r.utility_t);
+  const pwrZ = results.map(r => r.power_z);
+  const pwrT = results.map(r => r.power_t);
 
   const pngBase = `μ_D=${inputs.mu_D} σ=${inputs.sigma} α=${inputs.alpha}`;
 
   return (
-    <div className="space-y-4">
-      {/* Legend */}
-      <div className="flex items-center gap-6 px-1">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-0.5" style={{ background: COLOR_Z }} />
-          <span className="text-xs text-az-graphite">Paired Z test</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-0.5 border-t-2 border-dashed" style={{ borderColor: COLOR_T }} />
-          <span className="text-xs text-az-graphite">Paired t test</span>
-        </div>
-        <span className="text-[11px] text-az-platinum ml-auto">
-          Solid vertical = Z optimal (N={optimal_z.n}) · Dashed = t optimal (N={optimal_t.n})
-        </span>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        <Panel
-          ns={ns} yZ={lrZ} yT={lrT}
-          optZ={optimal_z.n} optT={optimal_t.n}
-          yTitle="LR+ = Power / α"
-          hoverFmt=".3f"
-          filename="paired-lr.png"
-          pngTitle={`Positive Likelihood Ratio · ${pngBase}`}
-        />
-        <Panel
-          ns={ns} yZ={mbZ} yT={mbT}
-          optZ={optimal_z.n} optT={optimal_t.n}
-          yTitle="Min. detectable benefit"
-          hoverFmt=".4f"
-          filename="paired-mb.png"
-          pngTitle={`Minimum Detectable Benefit · ${pngBase}`}
-        />
-        <Panel
-          ns={ns} yZ={utlZ} yT={utlT}
-          optZ={optimal_z.n} optT={optimal_t.n}
-          yTitle="Utility = LR+ × MB"
-          hoverFmt=".4f"
-          filename="paired-utility.png"
-          pngTitle={`Design Utility · ${pngBase}`}
-        />
-      </div>
+    <div className="grid grid-cols-3 gap-3">
+      {/* LR+: power right axis; legend top-left (curves start low on left) */}
+      <Panel
+        ns={ns} yZ={lrZ} yT={lrT}
+        optZ={optimal_z.n} optT={optimal_t.n}
+        yTitle="LR+ = Power / α"
+        hoverFmt=".3f"
+        filename="paired-lr.png"
+        pngTitle={`Positive Likelihood Ratio · ${pngBase}`}
+        showVlines={false}
+        pwrZ={pwrZ} pwrT={pwrT}
+        legendSide="left"
+      />
+      {/* MB: no right axis, no vlines; legend top-right (curves start high on left) */}
+      <Panel
+        ns={ns} yZ={mbZ} yT={mbT}
+        optZ={optimal_z.n} optT={optimal_t.n}
+        yTitle="Min. detectable benefit"
+        hoverFmt=".4f"
+        filename="paired-mb.png"
+        pngTitle={`Minimum Detectable Benefit · ${pngBase}`}
+        showVlines={false}
+        legendSide="right"
+      />
+      {/* Utility: vertical optimal-N markers; legend top-right (peak is left-of-center) */}
+      <Panel
+        ns={ns} yZ={utlZ} yT={utlT}
+        optZ={optimal_z.n} optT={optimal_t.n}
+        yTitle="Utility = LR+ × MB"
+        hoverFmt=".4f"
+        filename="paired-utility.png"
+        pngTitle={`Design Utility · ${pngBase}`}
+        showVlines={true}
+        legendSide="right"
+      />
     </div>
   );
 }
