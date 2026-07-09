@@ -75,7 +75,7 @@ export function PairedOptimalCard({ optimal_z, optimal_t, inputs, delta }: Props
               <StatItem label="LR+ = Power / α"      value={optimal_t.lr_t.toFixed(4)} />
               <StatItem label="Min detectable Δ"     value={optimal_t.mb_t.toFixed(4)} />
               <StatItem label="Utility (LR+ × MB)"   value={optimal_t.utility_t.toFixed(4)} />
-              <StatItem label="df = 2(N − 1)"          value={2 * (optimal_t.n - 1)} />
+              <StatItem label="df = N − 1"               value={optimal_t.n - 1} />
             </div>
           </CardContent>
         </Card>
