@@ -4,6 +4,65 @@ library(gsDesign)
 #* @apiTitle GS-Intersect API
 #* @apiDescription Utility optimization for Group Sequential survival trial design
 
+#* Health check
+#* @get /health
+function() list(status = "ok")
+
+#* Paired Z/T test design utility
+#* @post /paired
+function(req) {
+  body <- jsonlite::fromJSON(req$postBody)
+
+  mu_D  <- as.numeric(body$mu_D  %||% 2)
+  sigma <- as.numeric(body$sigma %||% 3)
+  alpha <- as.numeric(body$alpha %||% 0.05)
+  n_min <- as.integer(body$n_min %||% 5)
+  n_max <- as.integer(body$n_max %||% 100)
+
+  if (n_min < 2)      n_min <- 2L
+  if (n_max > 500)    n_max <- 500L
+  if (n_min >= n_max) stop("n_min must be less than n_max")
+
+  delta  <- mu_D / sigma
+  n_grid <- seq(n_min, n_max)
+  z_crit <- qnorm(1 - alpha / 2)
+
+  results <- lapply(n_grid, function(n) {
+    ncp   <- delta * sqrt(n)
+    pwr_z <- 1 - pnorm(z_crit - ncp) + pnorm(-z_crit - ncp)
+    lr_z  <- pwr_z / alpha
+    mb_z  <- z_crit * sigma / sqrt(n)
+
+    df     <- n - 1L
+    t_crit <- qt(1 - alpha / 2, df = df)
+    pwr_t  <- 1 - pt(t_crit, df = df, ncp = ncp) + pt(-t_crit, df = df, ncp = ncp)
+    lr_t   <- pwr_t / alpha
+    mb_t   <- t_crit * sigma / sqrt(n)
+
+    list(
+      n         = n,
+      power_z   = round(pwr_z  * 100, 2),
+      power_t   = round(pwr_t  * 100, 2),
+      lr_z      = round(lr_z,   4),
+      lr_t      = round(lr_t,   4),
+      mb_z      = round(mb_z,   4),
+      mb_t      = round(mb_t,   4),
+      utility_z = round(lr_z * mb_z, 4),
+      utility_t = round(lr_t * mb_t, 4)
+    )
+  })
+
+  util_z <- sapply(results, `[[`, "utility_z")
+  util_t <- sapply(results, `[[`, "utility_t")
+
+  list(
+    results   = results,
+    optimal_z = results[[which.max(util_z)]],
+    optimal_t = results[[which.max(util_t)]],
+    delta     = round(delta, 4)
+  )
+}
+
 #* Enable CORS
 #* @filter cors
 function(req, res) {

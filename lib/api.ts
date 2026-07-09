@@ -427,6 +427,66 @@ cat(sprintf("Optimal utility: %.4f\\n",   utility[wM]))
   URL.revokeObjectURL(url);
 }
 
+// ── Paired Z/T Test ───────────────────────────────────────────────────────────
+
+export interface PairedInputs {
+  mu_D:  number;
+  sigma: number;
+  alpha: number;
+  n_min: number;
+  n_max: number;
+}
+
+export interface PairedResult {
+  n:         number;
+  power_z:   number;
+  power_t:   number;
+  lr_z:      number;
+  lr_t:      number;
+  mb_z:      number;
+  mb_t:      number;
+  utility_z: number;
+  utility_t: number;
+}
+
+export interface PairedResponse {
+  results:   PairedResult[];
+  optimal_z: PairedResult;
+  optimal_t: PairedResult;
+  delta:     number;
+}
+
+export async function runPaired(inputs: PairedInputs): Promise<PairedResponse> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const res = await fetch(`${apiUrl}/paired`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(inputs),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => `HTTP ${res.status}`);
+    throw new Error(`API error ${res.status}: ${text}`);
+  }
+  const data = await res.json();
+  const coerce = (r: Record<string, unknown>): PairedResult => ({
+    n:         Number(r.n),
+    power_z:   Number(r.power_z),
+    power_t:   Number(r.power_t),
+    lr_z:      Number(r.lr_z),
+    lr_t:      Number(r.lr_t),
+    mb_z:      Number(r.mb_z),
+    mb_t:      Number(r.mb_t),
+    utility_z: Number(r.utility_z),
+    utility_t: Number(r.utility_t),
+  });
+  return {
+    results:   (data.results as Record<string, unknown>[]).map(coerce),
+    optimal_z: coerce(data.optimal_z as Record<string, unknown>),
+    optimal_t: coerce(data.optimal_t as Record<string, unknown>),
+    delta:     Number(data.delta),
+  };
+}
+
 export function exportSimonCSV(results: SimonResult[]): void {
   const headers = [
     "Power (%)", "N1", "r1", "CV1", "N", "r", "CV_FA",
