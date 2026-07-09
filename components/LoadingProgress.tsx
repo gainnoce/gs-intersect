@@ -5,9 +5,10 @@ import { useState, useEffect } from "react";
 interface Props {
   phase:       "connecting" | "computing" | "processing";
   powerLevels: number;
+  label?:      string;
 }
 
-export function LoadingProgress({ phase, powerLevels }: Props) {
+export function LoadingProgress({ phase, powerLevels, label = "power levels" }: Props) {
   const [elapsed,  setElapsed]  = useState(0);
   const [progress, setProgress] = useState(0);
 
@@ -52,7 +53,7 @@ export function LoadingProgress({ phase, powerLevels }: Props) {
     return (
       <div className="flex flex-col items-center justify-center h-96 rounded-xl border border-az-light-platinum bg-white print-hidden">
         <p className="text-az-graphite text-sm font-semibold mb-1" style={{ fontFamily: "var(--font-heading)" }}>
-          Computing {powerLevels} power levels…
+          Computing {powerLevels} {label}…
         </p>
         <p className="text-az-platinum text-xs mb-4">Evaluating candidate designs</p>
         <div className="w-64 h-1.5 rounded-full bg-az-light-platinum overflow-hidden">

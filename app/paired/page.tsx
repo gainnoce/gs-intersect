@@ -4,24 +4,39 @@ import { useState } from "react";
 import { PairedInputPanel }  from "@/components/PairedInputPanel";
 import { PairedChart }       from "@/components/PairedChart";
 import { PairedOptimalCard } from "@/components/PairedOptimalCard";
+import { LoadingProgress }   from "@/components/LoadingProgress";
 import { runPaired }         from "@/lib/api";
 import type { PairedInputs, PairedResponse } from "@/lib/api";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 export default function PairedPage() {
   const [result,     setResult]     = useState<PairedResponse | null>(null);
   const [lastInputs, setLastInputs] = useState<PairedInputs | null>(null);
   const [loading,    setLoading]    = useState(false);
+  const [phase,      setPhase]      = useState<"connecting" | "computing" | "processing">("connecting");
   const [error,      setError]      = useState<string | null>(null);
 
   const handleRun = async (inputs: PairedInputs) => {
     setLoading(true);
+    setPhase("connecting");
     setLastInputs(inputs);
     setError(null);
+
+    let resolved = false;
+    const computingTimer = setTimeout(() => {
+      if (!resolved) setPhase("computing");
+    }, 3000);
+
     try {
       const data = await runPaired(inputs);
+      resolved = true;
+      clearTimeout(computingTimer);
+      setPhase("processing");
+      await new Promise(r => setTimeout(r, 500));
       setResult(data);
     } catch (e) {
+      resolved = true;
+      clearTimeout(computingTimer);
       const raw   = e instanceof Error ? e.message : "Unknown error";
       const isNet = /failed to fetch|network|load failed/i.test(raw);
       const debugId = `ERR-${Date.now().toString(36).toUpperCase()}`;
@@ -35,6 +50,8 @@ export default function PairedPage() {
       setLoading(false);
     }
   };
+
+  const nCount = lastInputs ? lastInputs.n_max - lastInputs.n_min + 1 : 56;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -65,11 +82,11 @@ export default function PairedPage() {
             )}
 
             {loading && (
-              <div className="flex flex-col items-center justify-center h-96 rounded-xl border border-az-light-platinum bg-white print-hidden">
-                <Loader2 className="w-8 h-8 text-az-mulberry animate-spin mb-3" />
-                <p className="text-sm text-az-graphite font-medium">Computing…</p>
-                <p className="text-xs text-az-platinum mt-1">Sweeping N from {lastInputs ? lastInputs.n_min : "—"} to …</p>
-              </div>
+              <LoadingProgress
+                phase={phase}
+                powerLevels={nCount}
+                label="sample sizes"
+              />
             )}
 
             {error && (
