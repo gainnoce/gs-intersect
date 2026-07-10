@@ -180,7 +180,7 @@ function Panel({ ns, yZ, yT, optZ, optT, powerZ, powerT, valZ, valT, metricLabel
   if (hasPower) {
     const pwrMin = yRange[0] * alpha! * 100;
     const pwrMax = yRange[1] * alpha! * 100;
-    pwrTickVals = [10, 20, 30, 40, 50, 60, 70, 80, 90].filter(p => p >= pwrMin && p <= pwrMax);
+    pwrTickVals = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99].filter(p => p >= pwrMin && p <= pwrMax);
     pwrTickText = pwrTickVals.map(p => `${p}%`);
   }
 
