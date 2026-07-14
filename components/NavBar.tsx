@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/",       label: "GS Design" },
-  { href: "/simon",  label: "Simon 2-Stage" },
-  { href: "/paired", label: "Paired Z/T" },
+  { href: "/",                   label: "GS Design" },
+  { href: "/simon",              label: "Simon 2-Stage" },
+  { href: "/paired",             label: "Paired Z/T" },
+  { href: "/diff-proportions",   label: "2-Arm ORR" },
 ];
 
 export function NavBar() {

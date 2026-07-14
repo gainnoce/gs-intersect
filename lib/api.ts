@@ -277,6 +277,76 @@ export function exportCSV(results: DesignResult[], k = 2): void {
   URL.revokeObjectURL(url);
 }
 
+// ── Difference Between Proportions ────────────────────────────────────────────
+
+export interface DiffProportionsInputs {
+  p_soc: number;
+  p_inv: number;
+  alpha: number;
+  n_min: number;
+  n_max: number;
+}
+
+export interface DiffProportionsResult {
+  n:       number;
+  power:   number;  // percentage (e.g. 80.3)
+  lr:      number;
+  mb:      number;
+  utility: number;
+}
+
+export interface DiffProportionsResponse {
+  results: DiffProportionsResult[];
+  optimal: DiffProportionsResult;
+  delta:   number;
+}
+
+export async function runDiffProportions(inputs: DiffProportionsInputs): Promise<DiffProportionsResponse> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const res = await fetch(`${apiUrl}/diff-proportions`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(inputs),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => `HTTP ${res.status}`);
+    throw new Error(`API error ${res.status}: ${text}`);
+  }
+  const data = await res.json();
+  const coerce = (r: Record<string, unknown>): DiffProportionsResult => ({
+    n:       Number(r.n),
+    power:   Number(r.power),
+    lr:      Number(r.lr),
+    mb:      Number(r.mb),
+    utility: Number(r.utility),
+  });
+  return {
+    results: (data.results as Record<string, unknown>[]).map(coerce),
+    optimal: coerce(data.optimal as Record<string, unknown>),
+    delta:   Number(data.delta),
+  };
+}
+
+export function exportDiffProportionsCSV(results: DiffProportionsResult[]): void {
+  const headers = ["N (per arm)", "Total N", "Power (%)", "LR+", "MB (ORR diff)", "Utility"];
+  const rows = results.map(r => [
+    r.n,
+    r.n * 2,
+    r.power.toFixed(2),
+    r.lr.toFixed(4),
+    (r.mb * 100).toFixed(4),
+    r.utility.toFixed(6),
+  ]);
+  const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "diff-proportions-results.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function exportPairedCSV(results: PairedResult[]): void {
   const headers = ["N", "Power Z (%)", "Power T (%)", "LR+ Z", "LR+ T", "MB Z", "MB T", "Utility Z", "Utility T"];
   const rows = results.map(r => [

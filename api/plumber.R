@@ -307,4 +307,53 @@ function(req) {
   )
 }
 
+#* Difference between proportions design utility (Gaussian approximation)
+#* @post /diff-proportions
+function(req) {
+  body <- jsonlite::fromJSON(req$postBody)
+
+  p_soc <- as.numeric(body$p_soc %||% 0.30)
+  p_inv <- as.numeric(body$p_inv %||% 0.50)
+  alpha <- as.numeric(body$alpha %||% 0.05)
+  n_min <- as.integer(body$n_min %||% 20L)
+  n_max <- as.integer(body$n_max %||% 200L)
+
+  if (n_min < 2)      n_min <- 2L
+  if (n_max > 1000)   n_max <- 1000L
+  if (n_min >= n_max) stop("n_min must be less than n_max")
+  if (p_inv <= p_soc) stop("p_inv must exceed p_soc")
+
+  delta  <- p_inv - p_soc
+  z_crit <- qnorm(1 - alpha / 2)
+
+  results <- lapply(seq(n_min, n_max), function(n) {
+    tryCatch({
+      sigma   <- sqrt(p_soc * (1 - p_soc) / n + p_inv * (1 - p_inv) / n)
+      power   <- pnorm(delta / sigma - z_crit) + pnorm(-delta / sigma - z_crit)
+      mb      <- z_crit * sigma
+      lr      <- power / alpha
+      utility <- lr * mb
+      list(
+        n       = n,
+        power   = round(power * 100, 2),
+        lr      = round(lr,      4),
+        mb      = round(mb,      4),
+        utility = round(utility, 4)
+      )
+    }, error = function(e) NULL)
+  })
+
+  results <- Filter(Negate(is.null), results)
+  if (length(results) == 0) stop("No valid results. Check parameters.")
+
+  utilities <- sapply(results, `[[`, "utility")
+  opt_idx   <- which.max(utilities)
+
+  list(
+    results = results,
+    optimal = results[[opt_idx]],
+    delta   = round(delta, 4)
+  )
+}
+
 `%||%` <- function(a, b) if (!is.null(a)) a else b
