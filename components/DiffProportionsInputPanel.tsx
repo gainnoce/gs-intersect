@@ -77,7 +77,7 @@ export function DiffProportionsInputPanel({ onRun, loading }: Props) {
         <CardTitle className="text-sm font-semibold text-az-navy" style={{ fontFamily: "var(--font-heading)" }}>
           Design Parameters
         </CardTitle>
-        <p className="text-[10px] text-az-platinum mt-0.5">Parallel 2-Arm · Binary Endpoint</p>
+        <p className="text-[10px] text-az-platinum mt-0.5">Parallel 2-Arm · Gaussian Approximation</p>
       </CardHeader>
       <CardContent className="space-y-5 pt-4">
 
@@ -130,7 +130,7 @@ export function DiffProportionsInputPanel({ onRun, loading }: Props) {
         )}
 
         <p className="text-[10px] text-az-platinum text-center leading-relaxed pt-1">
-          Gaussian approx · MB = z<sub>α/2</sub> × σ(p_SOC, p_INV, N) · N = per arm
+          Frequentist (Gaussian) only · Bayesian version in R supplementary script
         </p>
       </CardContent>
     </Card>
