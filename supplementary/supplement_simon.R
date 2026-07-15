@@ -5,7 +5,7 @@
 # Authors: Christina Yap, Daniel Jackson, Gabriel Innocenzi, Fabio Rigat
 #
 # Reproduces the Simon 2-stage utility results from Section 2.2
-# (Figure 2 and Table 1). Runs across all three scenarios in Table 1.
+# (Figure 2 and Table 1). Runs all six scenarios in Table 1.
 #
 # Requires: clinfun
 # Install:  install.packages("clinfun")
@@ -15,13 +15,16 @@ library(clinfun)
 # ── Table 1 scenarios ─────────────────────────────────────────────────────────
 
 scenarios <- list(
-  list(pu = 0.30, pa = 0.40, label = "Lower ORR 30%, Target ORR 40%"),
-  list(pu = 0.30, pa = 0.50, label = "Lower ORR 30%, Target ORR 50%"),  # Figure 2
-  list(pu = 0.30, pa = 0.60, label = "Lower ORR 30%, Target ORR 60%")
+  list(pu = 0.30, pa = 0.40, label = "pu=30% pa=40%  (Run 1)"),
+  list(pu = 0.30, pa = 0.50, label = "pu=30% pa=50%  (Run 2, Figure 2)"),
+  list(pu = 0.30, pa = 0.60, label = "pu=30% pa=60%  (Run 3)"),
+  list(pu = 0.50, pa = 0.60, label = "pu=50% pa=60%  (Run 4)"),
+  list(pu = 0.50, pa = 0.70, label = "pu=50% pa=70%  (Run 5)"),
+  list(pu = 0.50, pa = 0.80, label = "pu=50% pa=80%  (Run 6)")
 )
 
 ep1  <- 0.05   # type I error (false positive rate), fixed at 5% for all scenarios
-nmax <- 150    # maximum sample size to search over
+nmax <- 300    # maximum sample size to search over (increase if no design found for runs 1/4)
 
 # Power (1 - type II error) levels to sweep
 ep2_seq <- c(0.01, 0.05, seq(0.10, 0.50, 0.01))
@@ -103,12 +106,18 @@ for (sc in scenarios) {
   print(opt, row.names = FALSE)
 
   summary_rows[[length(summary_rows) + 1]] <- data.frame(
-    scenario      = sc$label,
-    lower_orr_pct = sc$pu * 100,
-    target_orr_pct = sc$pa * 100,
-    opt_n         = opt$n,
-    power_pct     = opt$power,
-    min_orr_delta_pct = round(opt$min_orr_delta * 100, 1)
+    scenario          = sc$label,
+    pu_pct            = sc$pu * 100,
+    pa_pct            = sc$pa * 100,
+    r1                = opt$r1,
+    n1                = opt$n1,
+    r                 = opt$r,
+    opt_n             = opt$n,
+    power_pct         = opt$power,
+    cv_ia_pct         = round(opt$cv_ia * 100, 1),
+    cv_fa_pct         = round(opt$cv_fa * 100, 1),
+    min_orr_delta_pct = round(opt$min_orr_delta * 100, 1),
+    utility           = opt$utility
   )
 
   fname <- sprintf("simon_utility_pu%02.0f_pa%02.0f.csv", sc$pu * 100, sc$pa * 100)
