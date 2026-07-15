@@ -36,7 +36,7 @@ function FieldLabel({ label, tooltip, error, htmlFor }: { label: string; tooltip
 export function SimonInputPanel({ onRun, loading, initialValues }: Props) {
   const [pu,        setPu]        = useState("0.30");
   const [pa,        setPa]        = useState("0.50");
-  const [ep1,       setEp1]       = useState("0.10");
+  const [ep1,       setEp1]       = useState("0.05");
   const [nmax,      setNmax]      = useState("150");
   const [submitted, setSubmitted] = useState(false);
 
@@ -143,7 +143,7 @@ export function SimonInputPanel({ onRun, loading, initialValues }: Props) {
             value={ep1}
             onChange={e => setEp1(e.target.value)}
             className={ic("ep1")}
-            placeholder="0.10"
+            placeholder="0.05"
           />
         </div>
 
