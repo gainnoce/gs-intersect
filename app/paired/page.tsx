@@ -43,6 +43,7 @@ export default function PairedPage() {
       const isNet = /failed to fetch|network|load failed/i.test(raw);
       const debugId = `ERR-${Date.now().toString(36).toUpperCase()}`;
       console.error(`[GS-Intersect Paired ${debugId}]`, e);
+      setResult(null);
       setError(
         isNet
           ? `Network error — the API could not be reached. Please refresh and try again.\n\nIf the problem persists, contact support with code: ${debugId}`

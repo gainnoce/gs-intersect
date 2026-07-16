@@ -61,6 +61,7 @@ export default function SimonPage() {
       const debugId = `ERR-${Date.now().toString(36).toUpperCase()}`;
       console.error(`[GS-Intersect Simon ${debugId}]`, e);
 
+      setResult(null);
       const smallEffect = inputs && (inputs.pa - inputs.pu) <= 0.15;
       setError(
         isNet && smallEffect
