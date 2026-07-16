@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, Loader2 } from "lucide-react";
+import { Info, Loader2, AlertTriangle } from "lucide-react";
 import type { SimonInputs } from "@/lib/api";
 
 interface Props {
@@ -65,6 +65,10 @@ export function SimonInputPanel({ onRun, loading, initialValues }: Props) {
     if (isNaN(nmV)  || nmV  < 10   || nmV  > 1000)            s.add("nmax");
     return s;
   }, [submitted, pu, pa, ep1, nmax]);
+
+  const puV_live  = parseFloat(pu);
+  const paV_live  = parseFloat(pa);
+  const smallEffect = !isNaN(puV_live) && !isNaN(paV_live) && (paV_live - puV_live) <= 0.15 && paV_live > puV_live;
 
   const handleRun = () => {
     setSubmitted(true);
@@ -185,8 +189,20 @@ export function SimonInputPanel({ onRun, loading, initialValues }: Props) {
           </p>
         )}
 
+        {smallEffect && (
+          <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-amber-700 leading-relaxed">
+              <span className="font-semibold">Small effect size (Δ ≤ 15%).</span>{" "}
+              Designs with pa − pu ≤ 0.15 require very large samples (N &gt; 200) and may
+              exceed the API computation limit. Use the supplementary R script locally for
+              reliable results.
+            </p>
+          </div>
+        )}
+
         <p className="text-[10px] text-az-platinum text-center leading-relaxed pt-1">
-          Sweeps 21 power levels (1%–99%) via{" "}
+          Sweeps 43 power levels (1%–99%) via{" "}
           <span className="font-mono">clinfun::ph2simon</span>.
           Optimal design minimises expected N under H₀.
         </p>

@@ -56,12 +56,16 @@ export default function SimonPage() {
     } catch (e) {
       resolved = true;
       clearTimeout(computingTimer);
-      const raw   = e instanceof Error ? e.message : "Unknown error";
-      const isNet = /failed to fetch|network|load failed/i.test(raw);
+      const raw     = e instanceof Error ? e.message : "Unknown error";
+      const isNet   = /failed to fetch|network|load failed/i.test(raw);
       const debugId = `ERR-${Date.now().toString(36).toUpperCase()}`;
       console.error(`[GS-Intersect Simon ${debugId}]`, e);
+
+      const smallEffect = inputs && (inputs.pa - inputs.pu) <= 0.15;
       setError(
-        isNet
+        isNet && smallEffect
+          ? `Computation limit exceeded — this effect size (pa − pu = ${((inputs.pa - inputs.pu) * 100).toFixed(0)}%) requires very large sample sizes (N > 200) that exceed the API timeout.\n\nRun the supplementary R script locally to obtain results for these parameters.\n\nDebug code: ${debugId}`
+          : isNet
           ? `Network error — the API could not be reached. Please refresh and try again.\n\nIf the problem persists, contact support with code: ${debugId}`
           : `${raw}\n\nIf this keeps happening, please refresh the page. Debug code: ${debugId}`
       );
