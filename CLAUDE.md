@@ -33,11 +33,11 @@ Read this entire section before making any changes. It overrides generic instinc
 
 ### What this project is
 
-AstraZeneca internal clinical trial design tool. Two pages:
+Clinical trial design tool. Two pages:
 - `/` — Group Sequential survival design (gsDesign R package)
 - `/simon` — Simon 2-stage binary endpoint design (clinfun R package)
 
-The primary collaborator reviewing outputs is **Fabio**, an AZ statistician. He provides R reference code that the tool must match exactly.
+The primary collaborator reviewing outputs is **Fabio**, a statistician. He provides R reference code that the tool must match exactly.
 
 ### Deployment — one step
 

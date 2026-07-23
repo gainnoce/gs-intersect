@@ -1,6 +1,6 @@
 # GS-Intersect
 
-AstraZeneca internal tool for clinical trial design optimisation. Two interactive tools — a Group Sequential survival trial designer and a Simon 2-stage binary endpoint designer — each finding the power level that maximises a utility score across the full design space.
+Open-source tool for clinical trial design optimisation. Two interactive tools — a Group Sequential survival trial designer and a Simon 2-stage binary endpoint designer — each finding the power level that maximises a utility score across the full design space.
 
 **Live:** https://gs-intersect.vercel.app
 
@@ -123,7 +123,7 @@ Auto-deploys from `main` branch when `api/` files change. Configured via `render
 ## Key Design Decisions
 
 ### Chart axes (all charts)
-All charts use a 4-axis layout: bottom x = events/N, top x = critical value (HR or ORR%), left y = utility score, right y = power%. This matches Fabio's (AZ statistician) R reference plots.
+All charts use a 4-axis layout: bottom x = events/N, top x = critical value (HR or ORR%), left y = utility score, right y = power%. This matches Fabio's R reference plots.
 
 ### Y-axis tick thinning
 With many data points, Plotly's default auto-ticks don't align with actual data. A greedy pixel-gap algorithm (`pixelBudget / plotHeight` minimum gap) thins ticks to data-aligned values without crowding. `tickmode: "array"` is required for Plotly to respect custom tickvals.

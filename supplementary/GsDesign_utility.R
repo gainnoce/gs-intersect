@@ -1,6 +1,6 @@
 ########################################################################################
 #
-# who: fabio.rigat@astrazeneca.com
+# who: Fabio Rigat
 #
 # what: characterisation of utility functions for Simon-2 stage and GS survival design optimisation
 #

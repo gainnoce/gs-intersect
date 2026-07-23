@@ -107,4 +107,4 @@ Types: `feat`, `fix`, `docs`, `refactor`, `style`
 ## Project contacts
 
 - **Gabe** — product owner
-- **Fabio** — AZ statistician, reviews statistical outputs and provides R reference code
+- **Fabio** — statistician, reviews statistical outputs and provides R reference code

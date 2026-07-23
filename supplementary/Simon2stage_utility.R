@@ -6,7 +6,7 @@
 #
 # when: V1.0 June 2026
 #
-# who: fabio.rigat@astrazeneca.com
+# who: Fabio Rigat
 #
 # license: GNU General Public License v3.0
 #
