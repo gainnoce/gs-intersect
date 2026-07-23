@@ -38,7 +38,6 @@ const vlineTrace = (x: number, yRange: number[]) => ({
   hoverinfo: "skip" as const, showlegend: false,
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const downloadPng = async (div: HTMLElement | null, filename: string, title: string) => {
   if (!div || !getPlotly()) return;
   const Plotly = getPlotly();
@@ -89,6 +88,7 @@ function Panel({ ns, yVals, optN, optPower, optVal, metricLabel, valDecimals,
                  yTitle, hoverFmt, filename, pngTitle, showVline, alpha }: PanelProps) {
   const [div, setDiv]       = useState<HTMLElement | null>(null);
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   const yRange   = yPad(yVals);

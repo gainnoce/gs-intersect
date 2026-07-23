@@ -54,6 +54,7 @@ export function SimonAuxCharts({ results, inputs }: Props) {
   const [lrDiv,   setLrDiv]   = useState<HTMLElement | null>(null);
   const [cvDiv,   setCvDiv]   = useState<HTMLElement | null>(null);
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   // Sort by N ascending — same order as SimonChart

@@ -41,7 +41,6 @@ const vlineTrace = (x: number, yRange: number[], color: string, dash: "solid" | 
 });
 
 // Re-enables showlegend on named curve traces and injects horizontal bottom legend
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const downloadPng = async (div: HTMLElement | null, filename: string, title: string) => {
   if (!div || !getPlotly()) return;
   const Plotly = getPlotly();
@@ -130,6 +129,7 @@ function Panel({ ns, yZ, yT, optZ, optT, powerZ, powerT, valZ, valT, metricLabel
                  showVlines, alpha }: PanelProps) {
   const [div, setDiv] = useState<HTMLElement | null>(null);
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   const yRange   = yPad([...yZ, ...yT]);
